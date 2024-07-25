@@ -1,0 +1,157 @@
+/*
+MIT License
+
+Copyright (c) 2024 Innoptech
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+ */
+
+#ifndef OPENFDCM_SEARCH_H
+#define OPENFDCM_SEARCH_H
+#include <memory>
+#include <utility>
+#include "openfdcm/matching/searchstrategy.h"
+#include "openfdcm/matching/optimizestrategy.h"
+
+
+namespace openfdcm::matching
+{
+    struct Match
+    {
+        int tmplIdx;
+        float score;
+        core::Mat23 transform;
+    };
+
+    // ************************************************************************************************************
+    // Concepts
+    // ************************************************************************************************************
+    class MatcherInstance {
+    };
+
+    template<typename T>
+    concept IsMatcherInstance = std::is_base_of_v<MatcherInstance, T>;
+
+    // ************************************************************************************************************
+    // Functions for optimizer implementations
+    // ************************************************************************************************************
+
+    /**
+     * @brief Search for optimal matches between the templates and the scene
+     * @tparam T The MatchStrategy type
+     * @param matcher The matcher used to find and optimize matches
+     * @param templates The templates expressed as a vector of LineArrays
+     * @param scene The scene expressed as a core::LineArray
+     * @return A vector containing all the sorted matches by score (lowest to highest)
+     */
+    template<IsMatcherInstance T>
+    std::vector<Match>  search(const T & matcher, const SearchStrategy &strategy, const OptimizeStrategy &optimizer,
+                               std::vector<core::LineArray> const& templates, core::LineArray const& original_scene);
+
+
+    namespace detail {
+        struct MatcherConcept
+        {
+            virtual ~MatcherConcept() noexcept = default;
+            [[nodiscard]] virtual std::unique_ptr<MatcherConcept> clone() const = 0;
+            [[nodiscard]] virtual std::vector<Match> search(const SearchStrategy &strategy,
+                                                            const OptimizeStrategy &optimizer,
+                                                            std::vector<core::LineArray> const& templates,
+                                                            core::LineArray const& scene) const = 0;
+        };
+
+        template<IsMatcherInstance T>
+        struct MatcherModel : public MatcherConcept
+        {
+            explicit MatcherModel( T value ) noexcept : object{ std::move(value) }
+            {}
+
+            [[nodiscard]] std::unique_ptr<MatcherConcept> clone() const final
+            {
+                return std::make_unique<MatcherModel<T>>(*this);
+            }
+
+            [[nodiscard]] std::vector<Match> search(const SearchStrategy &strategy, const OptimizeStrategy &optimizer,
+                    std::vector<core::LineArray> const& templates, core::LineArray const& scene) const final
+            {
+                return openfdcm::matching::search(object, strategy, optimizer, templates, scene);
+            }
+
+            T object;
+        };
+    }
+
+    /// Type erased MatchStrategy
+    class MatchStrategy : public MatcherInstance
+    {
+        std::unique_ptr<detail::MatcherConcept> pimpl;
+
+    public:
+        template<IsMatcherInstance T>
+        /* implicit */ MatchStrategy(T const& x) : pimpl{std::make_unique<detail::MatcherModel<T>>(x)}
+        {}
+
+        MatchStrategy(MatchStrategy const& other) : pimpl{other.pimpl->clone()} {}
+        MatchStrategy& operator=(MatchStrategy const& other) { pimpl = other.pimpl->clone(); return *this; }
+        MatchStrategy(MatchStrategy&& other) noexcept = default;
+        MatchStrategy& operator=(MatchStrategy&& other) noexcept = default;
+
+        [[nodiscard]] std::vector<Match> search(const SearchStrategy &strategy, const OptimizeStrategy &optimizer,
+                std::vector<core::LineArray> const& templates, core::LineArray const& scene) const
+        {
+            return this->pimpl->search(strategy, optimizer, templates, scene);
+        }
+    };
+
+
+    // ************************************************************************************************************
+    // Free Functions for MatchStrategy
+    // ************************************************************************************************************
+    /**
+     * @brief Search for optimal matches between the templates and the scene
+     * @param matcher The matcher used to find and optimize matches
+     * @param strategy The search strategy
+     * @param strategy The optimizer
+     * @param templates The templates expressed as a vector of LineArrays
+     * @param scene The scene expressed as a core::LineArray
+     * @return A vector containing all the sorted matches by score (lowest to highest)
+     */
+    inline std::vector<Match> search(const MatchStrategy &matcher,
+                                     const SearchStrategy &strategy,
+                                     const OptimizeStrategy &optimizer,
+                                     std::vector<core::LineArray> const& templates,
+                                     core::LineArray const& scene)
+    {
+        return matcher.search(strategy, optimizer, templates, scene);
+    }
+
+    /**
+     * @brief Smaller than Operator to enable sorting by score (smallest to largest)
+     * @param rhs Right hand side Match
+     * @param lhs Left hand side Match
+     * @return True if score of rhs is smaller
+     */
+    inline bool operator<(Match const& rhs, Match const& lhs) noexcept
+    {
+        return rhs.score < lhs.score;
+    }
+} // namespace openfdcm::matching
+
+
+#endif //OPENFDCM_SEARCH_H

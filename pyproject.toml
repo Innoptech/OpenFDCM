@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "ninja", "cmake>=3.15.3"]
+build-backend = "setuptools.build_meta"
+
+[tool.mypy]
+files = "setup.py"
+python_version = "3.7"
+strict = true
+show_error_codes = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["ninja"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = [
+    "error",
+    "ignore:(ast.Str|Attribute s|ast.NameConstant|ast.Num) is deprecated:DeprecationWarning:_pytest",
+]
+testpaths = ["tests/python"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.4.1"
+tag_format = "v$version"
+
+[tool.cibuildwheel]
+test-command = "pytest {project}/tests"
+test-extras = ["test"]
+test-skip = ["*universal2:arm64", "pp*", "cp{38,39,310,311,312}-manylinux_i686", "cp38-macosx_arm64", "*musllinux*", "*ppc64le", "*s390x"]
+# Setuptools bug causes collision between pypy and cpython artifacts
+before-build = "rm -rf {project}/build"
+
+[tool.poetry.dependencies]
+eigen3 = "3.4.0"
+pybind11 = "v2.11.1"
+catch2 = "v3.4.0"

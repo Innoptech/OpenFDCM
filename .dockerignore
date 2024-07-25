@@ -1,0 +1,23 @@
+docker/Dockerfile*
+*build*
+dist*
+extern/
+
+.vscode/
+.eggs/
+.idea/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+*.a
+
+# Images and large files
+*.jpg
+*.png
+!tests/assets/*.png
+*.json
