@@ -34,7 +34,7 @@ FetchContent_MakeAvailable(openfdcm)
 ```bash
 git clone https://github.com/Innoptech/OpenFDCM
 mkdir OpenFDCM/build && cd OpenFDCM/build
-cmake -DOpenFDCM_BUILD_TESTS=ON .. && cmake --build .
+cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
 ctest .
 ```
 
