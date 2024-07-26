@@ -43,8 +43,12 @@ result_translation = best_match.transform[0:2, 2]
 
 For a complete example in python, see [templatematching.py](examples/templatematching.py).
 
-# Integrate to your codebase
-### Smart method
+
+# C++ usage
+## Requirements
+C++20 or higher.
+
+## Integrate to your codebase
 Include this repository with CMAKE Fetchcontent and link your executable/library to `openfdcm::matching library`.   
 Choose weither you want to fetch a specific branch or tag using `GIT_TAG`. Use the `main` branch to keep updated with the latest improvements.
 ```cmake
@@ -66,9 +70,6 @@ mkdir OpenFDCM/build && cd OpenFDCM/build
 cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
 ctest .
 ```
-
-# Requirements
-C++20 or higher.
 
 # Perform object pose estimation
 ![DT3 FDCM Maps](docs/static/object_pose_estimation.png)
