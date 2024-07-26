@@ -4,10 +4,11 @@ A modern C++ open implementation of Fast Directional Chamfer Matching with few i
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
-[![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg)](LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?style=flat-square&logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
-
+[![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg?style=flat-square)](LICENSE)  
+[![pypi](https://badge.fury.io/py/openfdcm.svg?style=flat-square)](https://badge.fury.io/py/openfdcm)
+[![build](https://github.com/Innoptech/OpenFDCM/actions/workflows/publish-to-test-pypi.yml/badge.svg?style=flat-square)](https://github.com/Innoptech/OpenFDCM/actions/workflows/publish-to-test-pypi.yml)
+[![Python](https://img.shields.io/pypi/pyversions/openfdcm.svg)](https://pypi.org/project/openfdcm/)  
 **Beta Milestone:**
 - [x] Removal of OpenCV dependency
 - [x] Python Binding
