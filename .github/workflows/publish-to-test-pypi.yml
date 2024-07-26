@@ -33,7 +33,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .
 
-      - name: Run tests
+      - name: Build C++ project and run C++ tests
+        run: |
+          mkdir OpenFDCM/build && cd OpenFDCM/build
+          cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
+          ctest .
+
+      - name: Run Python tests
         run: |
           python3 -m pip install numpy pytest
           pytest
