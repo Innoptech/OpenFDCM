@@ -38,5 +38,5 @@ before-build = "rm -rf {project}/build"
 
 [tool.poetry.dependencies]
 eigen3 = "3.4.0"
-pybind11 = "v2.11.1"
+pybind11 = "v2.13.1"
 catch2 = "v3.4.0"

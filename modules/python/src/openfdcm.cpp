@@ -23,6 +23,7 @@ SOFTWARE.
  */
 
 #include "pybind11/pybind11.h"
+#include "openfdcm/core/version.h"
 
 //-------------------------------------------------------------------------------
 // PYTHON BINDINGS
@@ -32,11 +33,12 @@ using namespace pybind11::literals;
 
 void core(py::module_ &);
 void matching(py::module_ &);
+void example(py::module_ &);
 
 PYBIND11_MODULE(openfdcm, m) {
-    m.doc() = "Openfdcm is a library for executing FDCM for template matching.\n";
+    m.doc() = "A modern C++ open implementation of Fast Directional Chamfer Matching with few improvements.\n";
     core(m);
     matching(m);
 
-    m.attr("__version__") = "dev";
+    m.attr("__version__") = OPENFDCM_PROJECT_VER;
 }

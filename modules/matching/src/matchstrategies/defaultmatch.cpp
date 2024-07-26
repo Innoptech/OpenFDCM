@@ -40,7 +40,7 @@ namespace openfdcm::matching
 
     template<>
     std::vector<Match> search(const DefaultMatch & matcher,
-                              const SearchStrategy &strategy,
+                              const SearchStrategy &searcher,
                               const OptimizeStrategy &optimizer,
                               std::vector<LineArray> const& templates,
                               LineArray const& originalScene)
@@ -72,7 +72,7 @@ namespace openfdcm::matching
                 const LineArray &originalTmpl = templates.at(i);
                 if (originalTmpl.size() == 0) continue;
                 const auto& tmpl = sceneRatio*originalTmpl;
-                for (SearchCombination const &combination : establishSearchStrategy(strategy, tmpl, originalScene)) {
+                for (SearchCombination const &combination : establishSearchStrategy(searcher, tmpl, originalScene)) {
                     const auto &scene_line = getLine(shifted_scene, combination.getSceneLineIdx());
                     const auto &tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
                     const auto &align_vec = normalize(scene_line);

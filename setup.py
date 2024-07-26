@@ -158,7 +158,7 @@ test_deps = [
 setup(
     name                    ="openfdcm",
     version                 =read_version_from_pyproject("pyproject.toml"),
-    description             ="Fast Directional Chamfer Matching",
+    description             ="A modern C++ open implementation of Fast Directional Chamfer Matching with few improvements",
     long_description        =open('README.md').read(),
     long_description_content_type='text/markdown',
     url                     ='https://github.com/Innoptech/OpenFDCM',

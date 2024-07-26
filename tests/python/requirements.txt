@@ -1,3 +1,0 @@
-numpy==1.18.0
-opencv-python==4.5.3.56
-pytest

@@ -28,7 +28,7 @@ SOFTWARE.
 
 namespace openfdcm::matching
 {
-    class DefaultMatch : public MatcherInstance
+    class DefaultMatch : public MatchStrategyInstance
     {
     public:
         DefaultMatch(size_t depth, float coeff, float sceneRatio=1.f, float scenePadding=1.f)

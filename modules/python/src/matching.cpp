@@ -25,186 +25,162 @@ SOFTWARE.
 
 #include "pybind11/pybind11.h"
 #include <pybind11/stl.h>
-#include <pybind11/operators.h>
+#include <pybind11/eigen.h>
 
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
-#include "openfdcm/matching/searchstrategies/defaultsearch.h"
+
 #include "openfdcm/matching/optimizerstrategies/defaultoptimize.h"
+#include "openfdcm/matching/optimizerstrategies/indulgentoptimize.h"
+
+#include "openfdcm/matching/penaltystrategies/defaultpenalty.h"
+#include "openfdcm/matching/penaltystrategies/exponentialpenalty.h"
+
+#include "openfdcm/matching/searchstrategies/defaultsearch.h"
+#include "openfdcm/matching/searchstrategies/concentricrange.h"
 
 //-------------------------------------------------------------------------------
 // PYTHON BINDINGS
 //-------------------------------------------------------------------------------
 namespace py = pybind11;
 using namespace pybind11::literals;
-
+using namespace openfdcm;
 using namespace openfdcm::matching;
 
 void matching(py::module_ &m) {
-    //-------------------------------------------------------------------------------------------------------
-    // Dataframe
-    //-------------------------------------------------------------------------------------------------------
-    // Prototype class
-    py::class_<openfdcm::dataframe::Prototype>(m, "Prototype")
-            .def(py::init<const int&, const int&>(), "template_line_idx"_a, "scene_line_idx"_a)
-            .def("get_template_line_idx", &openfdcm::dataframe::Prototype::get_template_line_idx,
-                 "Get the template line index")
-            .def("get_scene_line_idx", &openfdcm::dataframe::Prototype::get_scene_line_idx, "Get the scene line index")
-            .def("__repr__",
-                 [](const openfdcm::dataframe::Prototype &proto) {
-                     std::string r("Prototype: (");
-                     r += "template line idx: " + std::to_string(proto.get_template_line_idx()) +
-                          ", scene line idx: " + std::to_string(proto.get_scene_line_idx()) + ")\n";
-                     return r;
-                 })
-            ;
+    // ---------------------------------------------------------
+    // 1D optimize strategies
+    // ---------------------------------------------------------
+    py::class_<OptimizeStrategy>(m, "OptimizeStrategy")
+            .def(py::init<const DefaultOptimize&>())
+            .def(py::init<const IndulgentOptimize&>())
+            .def("__repr__", [](const OptimizeStrategy &a) {
+                return "<OptimizeStrategy>";
+            });
 
-    // TemplatePrototype class
-    py::class_<openfdcm::dataframe::TemplatePrototype>(m, "TemplatePrototype")
-            .def(py::init<const int&, const std::vector<openfdcm::dataframe::Prototype>&>(),
-                    "template_idx"_a, "prototypes"_a)
-            .def("get_template_idx", &openfdcm::dataframe::TemplatePrototype::get_template_idx,
-                 "Get the template index")
-            .def("get_prototypes", &openfdcm::dataframe::TemplatePrototype::get_prototypes,
-                 "Get the all the prototypes relative to this template")
-            .def("__repr__",
-                 [](const openfdcm::dataframe::TemplatePrototype &proto) {
-                     std::string r("TemplatePrototype: (");
-                     r += "template idx: " + std::to_string(proto.get_template_idx()) +
-                          ", number of prototypes: " + std::to_string(proto.get_prototypes().size()) + ")\n";
-                     return r;
-                 })
-            ;
-
-    //PrototypeResult class
-    py::class_<openfdcm::dataframe::PrototypeResult>(m, "PrototypeResult")
-            .def(py::init<openfdcm::TemplateState, const double&>(), "state"_a, "score"_a)
-            .def("state", &openfdcm::dataframe::PrototypeResult::state,
-                 "Get the prototype optimal state")
-            .def("score", &openfdcm::dataframe::PrototypeResult::score,
-                 "Get the prototype optimal evaluation score")
-            .def("__repr__",
-                 [](const openfdcm::dataframe::PrototypeResult &result) {
-                     std::string r("PrototypeResult: (");
-                     r += "score: " + std::to_string(result.score()) + ")\n";
-                     return r;
-                 })
-            ;
-
-    //TemplatePrototypeResult class
-    using tmpl_res = openfdcm::dataframe::TemplatePrototypeResult;
-    py::class_<tmpl_res>(m, "TemplatePrototypeResult")
-            .def(py::init<const int&, std::vector<openfdcm::dataframe::PrototypeResult>>(),
-                    "template_idx"_a, "prototype_result"_a)
-            .def("get_template_idx", &tmpl_res::get_template_idx,
-                 "Get the template index")
-            .def("get_prototype_result", py::overload_cast<>(&tmpl_res::get_prototype_result, py::const_),
-                 "Get the all the PrototypeResults for this given template")
-            .def("__repr__",
-                 [](const openfdcm::dataframe::TemplatePrototypeResult &result) {
-                     std::string r("TemplatePrototypeResult: (");
-                     r += "template idx: " + std::to_string(result.get_template_idx()) +
-                          ", number of prototypes result: " +
-                          std::to_string(result.get_prototype_result().size()) + ")\n";
-                     return r;
-                 })
-            ;
-
-    //-------------------------------------------------------------------------------------------------------
-    // Evaluation components
-    //-------------------------------------------------------------------------------------------------------
-    // Strategy class
-    py::class_<openfdcm::BaseStrategy>(m, "BaseStrategy")
-            .def(py::init<const int& , const int&>(), "max_scene_lines"_a, "max_template_lines"_a)
-            .def("establish_strategy", &openfdcm::BaseStrategy::establish_strategy,
-                 "scene"_a, "templateDataset"_a,
-                 "Establish a strategy (search sequence)")
-            .def("get_max_scene_lines", &openfdcm::BaseStrategy::get_max_scene_lines,
-                 "Get max scene lines number")
-            .def("get_max_template_lines", &openfdcm::BaseStrategy::get_max_template_lines,
-                 "Get max template lines number")
-            .def("__repr__",
-                 [](const openfdcm::BaseStrategy &strategy) {
-                     std::string r("BaseStrategy: (");
-                     r += "max scene lines: " + std::to_string(strategy.get_max_scene_lines()) +
-                          ", max template lines: " + std::to_string(strategy.get_max_template_lines()) + ")\n";
-                     return r;
-                 })
-            ;
-
-    // RadiusRangeStrategy class (perspective-dependant strategy)
-    py::class_<openfdcm::RadiusRangeStrategy, openfdcm::BaseStrategy>(m, "RadiusRangeStrategy")
-            .def(py::init<const int&, const int&, const int&, const int& >(),
-                    "max_scene_lines"_a, "max_template_lines"_a, "_lower_bound"_a, "_upper_bound"_a)
-            .def("establish_strategy", &openfdcm::RadiusRangeStrategy::establish_strategy,
-                 "scene"_a, "templateDataset"_a,
-                 "Establish a strategy (search sequence)")
-            .def("__repr__",
-                 [](const openfdcm::BaseStrategy &strategy) {
-                     std::string r("RadiusRangeStrategy: (");
-                     r += "max scene lines: " + std::to_string(strategy.get_max_scene_lines()) +
-                          ", max template lines: " + std::to_string(strategy.get_max_template_lines()) + ")\n";
-                     return r;
-                 })
-            ;
-
-    // BaseOptimizer class
-    py::class_<openfdcm::BaseOptimizer>(m, "BaseOptimizer")
+    py::class_<DefaultOptimize>(m, "DefaultOptimize")
             .def(py::init<>())
-            .def("optimize", &openfdcm::BaseOptimizer::optimize,
-                 "Dt3"_a, "template"_a, "template_line_idx"_a, "scene_line"_a, "metric"_a
-                 "Minimize Dt3 score according to template line alignment over scene_line")
-            .def("__repr__",
-                 [](const openfdcm::BaseOptimizer &optimizer) {
-                     (void) optimizer;
-                     std::string r("BaseOptimizer implementation\n");
-                     return r;
-                 })
-            ;
+            .def("__repr__", [](const DefaultOptimize &a) {
+                return "<DefaultOptimize>";
+            });
 
-    // BaseMetric class
-    py::class_<openfdcm::BaseMetric>(m, "BaseMetric")
+    py::class_<IndulgentOptimize>(m, "IndulgentOptimize")
+            .def(py::init<uint32_t>())
+            .def("get_number_of_passthroughs", &IndulgentOptimize::getNumberOfPassthroughs)
+            .def("__repr__", [](const IndulgentOptimize &a) {
+                return "<IndulgentOptimize: number of passthroughs=" + std::to_string(a.getNumberOfPassthroughs()) + ">";
+            });
+
+    py::implicitly_convertible<DefaultOptimize, OptimizeStrategy>();
+    py::implicitly_convertible<IndulgentOptimize, OptimizeStrategy>();
+
+    // ---------------------------------------------------------
+    // Penalty strategies
+    // ---------------------------------------------------------
+    py::class_<PenaltyStrategy>(m, "PenaltyStrategy")
+            .def(py::init<const DefaultPenalty&>())
+            .def(py::init<const ExponentialPenalty&>())
+            .def("__repr__", [](const PenaltyStrategy &a) {
+                return "<PenaltyStrategy>";
+            });
+
+    py::class_<DefaultPenalty>(m, "DefaultPenalty")
             .def(py::init<>())
-            .def("eval", &openfdcm::BaseMetric::eval, "Eval a metric given dt3 score and template length")
-            .def("__repr__",
-                 [](const openfdcm::BaseMetric &metric) {
-                     (void) metric;
-                     std::string r("BaseMetric implementation)\n");
-                     return r;
-                 })
-            ;
+            .def("__repr__", [](const DefaultPenalty &a) {
+                return "<DefaultPenalty>";
+            });
 
-    // PenalisedMetric class
-    py::class_<openfdcm::PenalisedMetric, openfdcm::BaseMetric>(m, "PenalisedMetric")
-            .def(py::init<const double&>(), "penalty"_a)
-            .def("get_penalty", &openfdcm::PenalisedMetric::get_penalty, "Get penalty coefficient")
-            .def("__repr__",
-                 [](const openfdcm::PenalisedMetric &metric) {
-                     std::string r("PenalisedMetric: (");
-                     r += "penalty: " + std::to_string(metric.get_penalty()) + ")\n";
-                     return r;
-                 })
-            ;
+    py::class_<ExponentialPenalty>(m, "ExponentialPenalty")
+            .def(py::init<float>())
+            .def("get_tau", &ExponentialPenalty::getTau)
+            .def("__repr__", [](const ExponentialPenalty &a) {
+                return "<ExponentialPenalty: tau=" + std::to_string(a.getTau()) + ">";
+            });
 
-    // Search class
-    py::class_<openfdcm::Search>(m, "Search")
-            .def(py::init<openfdcm::BaseStrategy*, openfdcm::BaseMetric*, openfdcm::BaseOptimizer*>(),
-                    "strategy"_a, "metric"_a, "optimizer"_a)
-            .def("search", &openfdcm::Search::search, "dt3"_a, "scene"_a, "list of templates"_a,
-                 "Evaluate a template dataset over a scene")
-            .def("__repr__",
-                 [](const openfdcm::Search &evaluator) {
-                     (void) evaluator;
-                     std::string r("Search implementation\n");
-                     return r;
-                 })
-            ;
+    py::implicitly_convertible<DefaultPenalty, PenaltyStrategy>();
+    py::implicitly_convertible<ExponentialPenalty, PenaltyStrategy>();
 
-    //-------------------------------------------------------------------------------------------------------
-    // Functions
-    //-------------------------------------------------------------------------------------------------------
-    m.def("get_best_protos", &openfdcm::dataframe::get_best_protos,
-          "_template_results"_a, "n_best"_a=1, "Finds the N best prototypes.");
+    // ---------------------------------------------------------
+    // Search strategies
+    // ---------------------------------------------------------
+    py::class_<SearchStrategy>(m, "SearchStrategy")
+            .def(py::init<const DefaultSearch&>())
+            .def(py::init<const ConcentricRangeStrategy&>())
+            .def("__repr__", [](const SearchStrategy &a) {
+                return "<SearchStrategy>";
+            });
 
-    m.def("eval", py::overload_cast<const openfdcm::Dt3&, const openfdcm::BaseTemplate&, const openfdcm::BaseMetric&>
-            (&openfdcm::eval), "dt3"_a, "template"_a, "metric"_a, "Evaluate a template on DT3 given a metric");
+    py::class_<DefaultSearch>(m, "DefaultSearch")
+            .def(py::init<size_t const, size_t const>())
+            .def("get_max_tmpl_lines", &DefaultSearch::getMaxTmplLines)
+            .def("get_max_scene_lines", &DefaultSearch::getMaxSceneLines)
+            .def("__repr__", [](const DefaultSearch &a) {
+                return "<DefaultSearch: max tmpl lines=" + std::to_string(a.getMaxTmplLines()) +
+                       ", max scene lines=" + std::to_string(a.getMaxSceneLines()) + ">";
+            });
+
+    py::class_<ConcentricRangeStrategy>(m, "ConcentricRangeStrategy")
+            .def(py::init<size_t const, size_t const, core::Point2, float const, float const>())
+            .def("get_max_tmpl_lines", &ConcentricRangeStrategy::getMaxTmplLines)
+            .def("get_max_scene_lines", &ConcentricRangeStrategy::getMaxSceneLines)
+            .def("get_center_position", &ConcentricRangeStrategy::getCenterPosition)
+            .def("get_low_radius_boundary", &ConcentricRangeStrategy::getLowBoundary)
+            .def("get_high_radius_boundary", &ConcentricRangeStrategy::getHighBoundary)
+            .def("__repr__", [](const ConcentricRangeStrategy &a) {
+                return "<ConcentricRangeStrategy: get_max_tmpl_lines=" + std::to_string(a.getMaxTmplLines()) +
+                       ", max scene lines=" + std::to_string(a.getMaxSceneLines()) +
+                       ", center position=(" + std::to_string(a.getCenterPosition().x()) + ", " + std::to_string(a.getCenterPosition().y()) + ")" +
+                       ", low radius boundary=" + std::to_string(a.getLowBoundary()) +
+                       ", high radius boundary=" + std::to_string(a.getHighBoundary()) + ">";
+            });
+
+    py::implicitly_convertible<DefaultSearch, SearchStrategy>();
+    py::implicitly_convertible<ConcentricRangeStrategy, SearchStrategy>();
+
+    // ---------------------------------------------------------
+    // Match strategies
+    // ---------------------------------------------------------
+    py::class_<MatchStrategy>(m, "MatchStrategy")
+            .def(py::init<const DefaultMatch&>())
+            .def("__repr__", [](const MatchStrategy &a) {
+                return "<MatchStrategy>";
+            });
+
+    py::class_<DefaultMatch>(m, "DefaultMatch")
+            .def(py::init<size_t, float, float, float>())
+            .def("get_depth", &DefaultMatch::getDepth)
+            .def("get_coeff", &DefaultMatch::getCoeff)
+            .def("get_scene_ratio", &DefaultMatch::getSceneRatio)
+            .def("get_scene_padding", &DefaultMatch::getScenePadding)
+            .def("__repr__", [](const DefaultMatch &a) {
+                return "<DefaultMatch: depth=" + std::to_string(a.getDepth()) +
+                       ", coeff=" + std::to_string(a.getCoeff()) +
+                       ", scene ratio=" + std::to_string(a.getSceneRatio()) +
+                       ", scene padding=" + std::to_string(a.getScenePadding()) + ">";
+            });
+
+    // Register implicit conversion using pybind11 type casters
+    py::implicitly_convertible<DefaultMatch, MatchStrategy>();
+
+    py::class_<Match>(m, "Match")
+            .def(py::init<>())
+            .def_readwrite("tmpl_idx", &Match::tmplIdx)
+            .def_readwrite("score", &Match::score)
+            .def_readwrite("transform", &Match::transform)
+            .def("__repr__", [](const Match &a) {
+                std::ostringstream oss;
+                oss << "<Match tmplIdx=" << a.tmplIdx
+                    << ", score=" << a.score
+                    << ", transform=\n" << a.transform << ">";
+                return oss.str();
+            });
+
+    m.def("search", [](const MatchStrategy &matcher,
+                       const SearchStrategy &searcher,
+                       const OptimizeStrategy &optimizer,
+                       std::vector<Eigen::Matrix<float, 4, -1>> const& templates,
+                       Eigen::Matrix<float, 4, -1> const& scene)
+          {
+              return matching::search(matcher, searcher, optimizer, templates, scene);
+          },
+          "matcher"_a, "searcher"_a, "optimizer"_a, "templates"_a, "scene"_a);
 }
