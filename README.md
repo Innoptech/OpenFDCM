@@ -17,6 +17,10 @@ A modern C++ open implementation of Fast Directional Chamfer Matching with few i
 
 # Python usage
 
+### Install
+`pip install openfdcm` or `pip install -U git+https://github.com/Innoptech/OpenFDCM@main`
+
+### Template matching example
 ```python
 templates = # A list of 4xN array where each array is a template represented as N lines [x1, y1, x2, y2]^T
 scene = # A 4xM array representing the M scene lines
@@ -45,10 +49,10 @@ For a complete example in python, see [templatematching.py](examples/templatemat
 
 
 # C++ usage
-## Requirements
+### Requirements
 C++20 or higher.
 
-## Integrate to your codebase
+### Integrate to your codebase
 Include this repository with CMAKE Fetchcontent and link your executable/library to `openfdcm::matching library`.   
 Choose weither you want to fetch a specific branch or tag using `GIT_TAG`. Use the `main` branch to keep updated with the latest improvements.
 ```cmake
