@@ -20,9 +20,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
- */
+*/
 
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
+#include <chrono>
+#include <iostream>
 
 using namespace openfdcm::core;
 
@@ -33,74 +35,87 @@ namespace openfdcm::matching
         auto const& [min_point, max_point] = minmaxPoint(scene);
         Point2 const distanceminmax = max_point - min_point;
         float const corrected_ratio = std::max(1.f, scene_padding);
-        Point2 const required_max = corrected_ratio*distanceminmax.maxCoeff()*Point2{1.f,1.f};
-        Point2 const center_diff =  required_max/2.f - (max_point+min_point)/2.f;
-        return {center_diff, (required_max.array()+1.f).ceil().cast<size_t>()};
+        Point2 const required_max = corrected_ratio * distanceminmax.maxCoeff() * Point2{1.f, 1.f};
+        Point2 const center_diff = required_max / 2.f - (max_point + min_point) / 2.f;
+        return {center_diff, (required_max.array() + 1.f).ceil().cast<size_t>()};
     }
 
     template<>
-    std::vector<Match> search(const DefaultMatch & matcher,
-                              const SearchStrategy &searcher,
-                              const OptimizeStrategy &optimizer,
+    std::vector<Match> search(const DefaultMatch& matcher,
+                              const SearchStrategy& searcher,
+                              const OptimizeStrategy& optimizer,
                               std::vector<LineArray> const& templates,
                               LineArray const& originalScene)
     {
-        if (originalScene.size() == 0 or templates.empty())
+        if (originalScene.size() == 0 || templates.empty())
             return {};
+
+        auto start = std::chrono::high_resolution_clock::now();
 
         std::vector<Match> all_matches{};
 
         // Apply scene ratio
         const auto sceneRatio = matcher.getSceneRatio();
-        const auto scene = sceneRatio*originalScene;
+        const auto scene = sceneRatio * originalScene;
 
         // Shift the scene so that all scene lines are greater than 0.
         // DT3 requires that all line points have positive values
+        auto start_shift = std::chrono::high_resolution_clock::now();
         SceneShift const& scene_shift = getSceneCenteredTranslation(scene, matcher.getScenePadding());
         LineArray const& shifted_scene = translate(scene, scene_shift.translation);
+        auto end_shift = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration_shift = end_shift - start_shift;
+        std::cout << "Scene shift duration: " << duration_shift.count() << " seconds" << std::endl;
 
         // Build DT3 feature map
-        const auto distanceScale = 1.f/sceneRatio; // Removes the effect of scaling down the scene
+        auto start_featuremap = std::chrono::high_resolution_clock::now();
+        const auto distanceScale = 1.f / sceneRatio; // Removes the effect of scaling down the scene
         auto const& featuremap = buildFeaturemap(
                 matcher.getDepth(), scene_shift.sceneSize, matcher.getCoeff(), shifted_scene, distanceScale);
+        auto end_featuremap = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration_featuremap = end_featuremap - start_featuremap;
+        std::cout << "Feature map build duration: " << duration_featuremap.count() << " seconds" << std::endl;
 
-    #pragma omp parallel default(shared)
+        // Matching
+        auto start_matching = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < templates.size(); ++i)
         {
-            std::vector<Match> private_matches{};
-#pragma omp for schedule(dynamic, 10)
-            for (size_t i=0; i < templates.size(); ++i) {
-                const LineArray &originalTmpl = templates.at(i);
-                if (originalTmpl.size() == 0) continue;
-                const auto& tmpl = sceneRatio*originalTmpl;
-                for (SearchCombination const &combination : establishSearchStrategy(searcher, tmpl, originalScene)) {
-                    const auto &scene_line = getLine(shifted_scene, combination.getSceneLineIdx());
-                    const auto &tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
-                    const auto &align_vec = normalize(scene_line);
-                    // Two possible transforms for the line alignment
-                    for (auto const &initial_transf : aling(tmpl_line, scene_line)) {
-                        const LineArray &aligned_tmpl = transform(tmpl, initial_transf);
-                        std::optional<OptimalTranslation> const &result = optimize(
-                                optimizer, aligned_tmpl, align_vec, featuremap);
-                        if (result.has_value()) {
-                            OptimalTranslation const &opt_transl = result.value();
-                            // Combine initial_transf with opt_transl and subtract the initial scene shift
-                            Mat23 combined = combine(-scene_shift.translation,
-                                                     combine(opt_transl.translation, initial_transf));
-                            combined.block<2,1>(0,2) /= sceneRatio;
-                            private_matches.emplace_back(
-                                    i, opt_transl.score,
-                                    combined
-                            );
-                        }
+            const LineArray& originalTmpl = templates.at(i);
+            if (originalTmpl.size() == 0) continue;
+            const auto& tmpl = sceneRatio * originalTmpl;
+            for (SearchCombination const& combination : establishSearchStrategy(searcher, tmpl, originalScene))
+            {
+                const auto& scene_line = getLine(shifted_scene, combination.getSceneLineIdx());
+                const auto& tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
+                const auto& align_vec = normalize(scene_line);
+                for (auto const& initial_transf : align(tmpl_line, scene_line))
+                {
+                    const LineArray& aligned_tmpl = transform(tmpl, initial_transf);
+                    std::optional<OptimalTranslation> const& result = optimize(
+                            optimizer, aligned_tmpl, align_vec, featuremap);
+                    if (result.has_value())
+                    {
+                        OptimalTranslation const& opt_transl = result.value();
+                        Mat23 combined = combine(-scene_shift.translation,
+                                                 combine(opt_transl.translation, initial_transf));
+                        combined.block<2, 1>(0, 2) /= sceneRatio;
+                        all_matches.emplace_back(
+                                i, opt_transl.score, combined
+                        );
                     }
                 }
             }
-    #pragma omp critical
-            {
-                std::move(private_matches.begin(),private_matches.end(),std::back_inserter(all_matches));
-            }
         }
+        auto end_matching = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration_matching = end_matching - start_matching;
+        std::cout << "Matching duration: " << duration_matching.count() << " seconds" << std::endl;
+
         std::sort(all_matches.begin(), all_matches.end());
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration_total = end - start;
+        std::cout << "Total search duration: " << duration_total.count() << " seconds" << std::endl;
+
         return all_matches;
     }
 }

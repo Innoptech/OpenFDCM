@@ -224,7 +224,7 @@ TEST_CASE("transform lines")
         const Mat23 result = combine(transform, translation);
         REQUIRE(allClose(result, expected));
     }
-    SECTION("aling")
+    SECTION("align")
     {
         const LineArray linearray{
                 {0,  0, 0, 0},
@@ -235,7 +235,7 @@ TEST_CASE("transform lines")
         const Line alignment_line{-1,-1,1,1};
         const Point2& align_vec = normalize(alignment_line);
 
-        for(Mat23 const& transf : aling(getLine(linearray,0), alignment_line))
+        for(Mat23 const& transf : align(getLine(linearray,0), alignment_line))
         {
             const LineArray& alligned_linearray = transform(linearray, transf);
             const float angle_diff = getAngle(alignment_line)(0,0) - getAngle(getLine(linearray,0))(0,0);
