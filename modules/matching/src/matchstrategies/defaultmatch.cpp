@@ -23,8 +23,6 @@ SOFTWARE.
 */
 
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
-#include <chrono>
-#include <iostream>
 
 using namespace openfdcm::core;
 
@@ -50,8 +48,6 @@ namespace openfdcm::matching
         if (originalScene.size() == 0 || templates.empty())
             return {};
 
-        auto start = std::chrono::high_resolution_clock::now();
-
         std::vector<Match> all_matches{};
 
         // Apply scene ratio
@@ -60,24 +56,15 @@ namespace openfdcm::matching
 
         // Shift the scene so that all scene lines are greater than 0.
         // DT3 requires that all line points have positive values
-        auto start_shift = std::chrono::high_resolution_clock::now();
         SceneShift const& scene_shift = getSceneCenteredTranslation(scene, matcher.getScenePadding());
         LineArray const& shifted_scene = translate(scene, scene_shift.translation);
-        auto end_shift = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration_shift = end_shift - start_shift;
-        std::cout << "Scene shift duration: " << duration_shift.count() << " seconds" << std::endl;
 
         // Build DT3 feature map
-        auto start_featuremap = std::chrono::high_resolution_clock::now();
         const auto distanceScale = 1.f / sceneRatio; // Removes the effect of scaling down the scene
         auto const& featuremap = buildFeaturemap(
                 matcher.getDepth(), scene_shift.sceneSize, matcher.getCoeff(), shifted_scene, distanceScale);
-        auto end_featuremap = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration_featuremap = end_featuremap - start_featuremap;
-        std::cout << "Feature map build duration: " << duration_featuremap.count() << " seconds" << std::endl;
 
         // Matching
-        auto start_matching = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < templates.size(); ++i)
         {
             const LineArray& originalTmpl = templates.at(i);
@@ -99,22 +86,15 @@ namespace openfdcm::matching
                         Mat23 combined = combine(-scene_shift.translation,
                                                  combine(opt_transl.translation, initial_transf));
                         combined.block<2, 1>(0, 2) /= sceneRatio;
-                        all_matches.emplace_back(
-                                i, opt_transl.score, combined
+                        all_matches.push_back(
+                                Match{int(i), opt_transl.score, combined}
                         );
                     }
                 }
             }
         }
-        auto end_matching = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration_matching = end_matching - start_matching;
-        std::cout << "Matching duration: " << duration_matching.count() << " seconds" << std::endl;
 
         std::sort(all_matches.begin(), all_matches.end());
-
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration_total = end - start;
-        std::cout << "Total search duration: " << duration_total.count() << " seconds" << std::endl;
 
         return all_matches;
     }
