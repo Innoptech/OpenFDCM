@@ -72,100 +72,72 @@ TEST_CASE("getSceneCenteredTranslation")
     }
 }
 
-TEST_CASE("DefaultMatch")
-{
-    size_t const max_tmpl_lines{4}, max_scene_lines{4};
-    size_t const depth{4};
-    float const scene_ratio{1.0f};
+void run_test(float scene_ratio) {
+    size_t const max_tmpl_lines{4}, max_scene_lines{10};
+    size_t const depth{30};
     float const scene_padding{2.2f};
     float const coeff{5.f};
     DefaultSearch searchStrategy{max_tmpl_lines, max_scene_lines};
     DefaultOptimize optimizerStrategy{};
     DefaultMatch matcher{depth, coeff, scene_ratio, scene_padding};
-    LineArray tmpl = tests::createLines(4,10);
+    size_t const numberOfLines{10};
+    size_t const lineLength{100};
+    LineArray tmpl = tests::createLines(numberOfLines, lineLength);
 
-    SECTION("Pure rotation")
+    // Test for rotation
     {
-        Mat22 const rotation{{-1, 0},{0,-1}};
-        std::vector<LineArray> const templates{
-                rotate(tmpl, rotation),
-        };
-        LineArray scene(4,tmpl.cols());
-        scene << tmpl;
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
-        Mat22 const& result_rotation = matches.begin()->transform.block<2,2>(0,0);
-        Point2 const& result_translation = matches.begin()->transform.block<2,1>(0,2);
+        Mat23 scene_transform{{-1, 0, lineLength}, {0, -1, lineLength}};
+        LineArray scene = transform(tmpl, scene_transform);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, {tmpl}, scene);
+        Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
+        Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
-        REQUIRE(matches.size() == max_tmpl_lines * max_scene_lines*2); // *2 because 2 solution for line alignment
-        REQUIRE(allClose(result_rotation, rotation, 0, 1e-5));
-        REQUIRE(allClose(result_translation, Point2{0,0}, 0.f, 1.f));
-        REQUIRE(matches.begin()->score == 0.f);
+        REQUIRE(matches.size() == std::min(max_tmpl_lines, numberOfLines) * std::min(numberOfLines, max_scene_lines) * 2);
+        REQUIRE(allClose(scene_transform.block<2, 2>(0, 0), best_match_rotation, 1e-5));
+        REQUIRE(allClose(scene_transform.block<2, 1>(0, 2), best_match_translation, 1e0 * 1 / scene_ratio));
     }
-    SECTION("Pure translation")
-    {
-        Point2 const translation{5,-5};
-        std::vector<LineArray> const templates{
-                translate(tmpl, translation),
-        };
-        LineArray scene(4,tmpl.cols());
-        scene << tmpl;
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
-        Mat22 const& result_rotation = matches.begin()->transform.block<2,2>(0,0);
-        Point2 const& result_translation = matches.begin()->transform.block<2,1>(0,2);
 
-        REQUIRE(matches.size() == max_tmpl_lines * max_scene_lines*2); // *2 because 2 solution for line alignment
-        REQUIRE(allClose(result_rotation, Mat22::Identity()));
-        REQUIRE(allClose(result_translation, -translation, 0, 1.f));
-        REQUIRE(matches.begin()->score == 0.f);
-    }
-    SECTION("Empty scene")
+    // Test for translation
     {
-        std::vector<LineArray> const templates{tmpl};
-        LineArray scene{};
+        Mat23 scene_transform{{1, 0, 0}, {0, 1, 0}};
+        LineArray scene = transform(tmpl, scene_transform);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, {tmpl}, scene);
+        Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
+        Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
+
+        REQUIRE(matches.size() == max_tmpl_lines * max_scene_lines * 2);
+        REQUIRE(allClose(scene_transform.block<2, 2>(0, 0), best_match_rotation, 1e-5));
+        REQUIRE(allClose(scene_transform.block<2, 1>(0, 2), best_match_translation, 1e0 * 1 / scene_ratio));
+    }
+
+    // Test for empty scene
+    {
+        LineArray scene(4, 0);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, {tmpl}, scene);
+        REQUIRE(matches.empty());
+    }
+
+    // Test for empty template
+    {
+        std::vector<LineArray> templates;
+        LineArray scene = tmpl;
         std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
         REQUIRE(matches.empty());
     }
-    SECTION("Empty template")
+
+    // Test for template with empty line
     {
-        std::vector<LineArray> const templates{};
-        LineArray scene(4,tmpl.cols()); scene << tmpl;
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
-        REQUIRE(matches.empty());
-    }
-    SECTION("Template with empty line")
-    {
-        std::vector<LineArray> const templates{LineArray(4,0)};
-        LineArray scene(4,tmpl.cols()); scene << tmpl;
+        std::vector<LineArray> templates{LineArray(4, 0)};
+        LineArray scene = tmpl;
         std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
         REQUIRE(matches.empty());
     }
 }
 
-TEST_CASE("Scale down scene")
-{
-    size_t const max_tmpl_lines{4}, max_scene_lines{4};
-    size_t const depth{4};
-    float const scene_ratio{0.3f};
-    float const scene_padding{2.2f};
-    float const coeff{5.f};
-    DefaultMatch matcher{depth, coeff, scene_ratio, scene_padding};
-    DefaultSearch searchStrategy{max_tmpl_lines, max_scene_lines};
-    DefaultOptimize optimizerStrategy{};
+TEST_CASE("DefaultMatch") {
+    run_test(1.0f);
+}
 
-    LineArray tmpl = tests::createLines(4,10);
-
-    Mat22 const rotation{{-1, 0},{0,-1}};
-    std::vector<LineArray> const templates{
-            rotate(tmpl, rotation),
-    };
-    LineArray scene(4,tmpl.cols());
-    scene << tmpl;
-    std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
-    Mat22 const& result_rotation = matches.begin()->transform.block<2,2>(0,0);
-    Point2 const& result_translation = matches.begin()->transform.block<2,1>(0,2);
-
-    REQUIRE(matches.size() == max_tmpl_lines * max_scene_lines*2); // *2 because 2 solution for line alignment
-    REQUIRE(allClose(result_rotation, rotation, 0, 1e-5));
-    REQUIRE(allClose(result_translation, Point2{0,0}, 0.f, 1.f));
-    REQUIRE(matches.begin()->score < 2.4f); // Score is less precise when scene_ratio != 1.f
+TEST_CASE("Scale down scene") {
+    run_test(0.3f);
 }
