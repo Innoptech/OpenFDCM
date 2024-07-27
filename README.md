@@ -54,7 +54,7 @@ Choose weither you want to fetch a specific branch or tag using `GIT_TAG`. Use t
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
-    openstl
+    openfdcm
     GIT_REPOSITORY https://github.com/Innoptech/OpenFDCM.git
     GIT_TAG main
     GIT_SHALLOW TRUE
