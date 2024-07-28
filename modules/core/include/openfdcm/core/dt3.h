@@ -26,6 +26,7 @@ SOFTWARE.
 #define OPENFDCM_DT3_H
 #include <map>
 #include "openfdcm/core/imgproc.h"
+#include <thread>
 
 namespace openfdcm::core
 {
@@ -117,41 +118,65 @@ namespace openfdcm::core
     template<typename T>
     inline void propagateOrientation(FeatureMap<T> &featuremap, float coeff) noexcept
     {
-        //Propagate through orientations
+        // Collect angles
         std::vector<float> angles;
         angles.reserve(featuremap.size());
-        for (auto& [lineAngle, feature]: featuremap)
-            angles.push_back(lineAngle);
+        for (const auto& item : featuremap) {
+            angles.push_back(item.first);
+        }
 
-        auto forward = [&featuremap, &angles, coeff]() -> void {
-            int c = 0;
-            const int m = int(featuremap.size());
-            const int one_and_a_half_cycle = c + int(std::ceil(1.5 * m));
-            while (c <= one_and_a_half_cycle){
-                const int c1 = (m + ((c - 1) % m)) % m;
-                const int c2 = (m + (c % m)) % m;
-                const float h = std::abs(angles.at(c1) - angles.at(c2));
-                featuremap[angles.at(c2)] = featuremap[angles.at(c2)].min(
-                        featuremap[angles.at(c1)] + coeff*std::min(h,std::abs(h-M_PIf)));
-                c ++;
+        // Precompute constants
+        const int m = static_cast<int>(featuremap.size());
+        const int one_and_a_half_cycle_forward = static_cast<int>(std::ceil(1.5 * m));
+        const int one_and_a_half_cycle_backward = -static_cast<int>(std::floor(1.5 * m));
+
+        auto propagate = [&](int start, int end, int step) {
+            for (int c = start; c != end; c += step) {
+                int c1 = (m + ((c - step) % m)) % m;
+                int c2 = (m + (c % m)) % m;
+
+                const float angle1 = angles[c1];
+                const float angle2 = angles[c2];
+
+                const float h = std::abs(angle1 - angle2);
+                const float min_h = std::min(h, std::abs(h - M_PIf));
+
+                featuremap[angle2] = featuremap[angle2].min(featuremap[angle1] + coeff * min_h);
             }
         };
 
-        auto backward = [&featuremap, &angles, coeff]() -> void {
-            int c = int(featuremap.size());
-            const int m = int(featuremap.size());
-            const int one_and_a_half_cycle = c - int(std::floor(1.5 * m));
-            while (c >= one_and_a_half_cycle){
-                const int c1 = (m + ((c + 1) % m)) % m;
-                const int c2 = (m + (c % m)) % m;
-                const float h = std::abs(angles.at(c1) - angles.at(c2));
-                featuremap[angles.at(c2)] = featuremap[angles.at(c2)].min(
-                        featuremap[angles.at(c1)] + coeff*std::min(h,std::abs(h-M_PIf)));
-                c --;
+        propagate(0, one_and_a_half_cycle_forward, 1);
+        propagate(m, one_and_a_half_cycle_backward, -1);
+    }
+
+    inline void parallelForEach(const std::vector<float>& angles, std::function<void(float)> func, size_t num_threads) {
+        std::vector<std::thread> threads;
+        size_t angles_per_thread = angles.size() / num_threads;
+        std::mutex mtx;
+
+        auto thread_func = [&](size_t start, size_t end) {
+            for (size_t i = start; i < end; ++i) {
+                func(angles[i]);
             }
         };
-        forward();
-        backward();
+
+        for (size_t t = 0; t < num_threads; ++t) {
+            size_t start = t * angles_per_thread;
+            size_t end = (t == num_threads - 1) ? angles.size() : start + angles_per_thread;
+            threads.emplace_back(thread_func, start, end);
+        }
+
+        for (auto& thread : threads) {
+            thread.join();
+        }
+    }
+
+    inline Eigen::VectorXi vectorToEigenVector(const std::vector<long>& vec) {
+        Eigen::VectorXi eigenVec(vec.size());
+        for (size_t i = 0; i < vec.size(); ++i) {
+            eigenVec[i] = vec[i];
+        }
+        return eigenVec;
     }
 
     /**
@@ -163,21 +188,38 @@ namespace openfdcm::core
      * @param distanceScale A scale up factor applied only on distance and not on orientation
      * @return The FDCM featuremap
      */
-    inline FeatureMap<float>
-    buildFeaturemap(size_t depth, Size const& size, float coeff, LineArray const& linearray,
-                    float distanceScale=1.f) noexcept(false)
+    inline FeatureMap<float> buildFeaturemap(size_t depth, Size const& size, float coeff, LineArray const& linearray, float distanceScale = 1.f) noexcept(false)
     {
-        // Define a number of linearly spaced angles
+        // Step 1: Define a number of linearly spaced angles
         std::set<float> angles{};
-        for (size_t i{0}; i<depth; i++)
-            angles.insert(float(i)*M_PIf/float(depth) - M_PI_2f);
+        for (size_t i{0}; i < depth; i++)
+            angles.insert(float(i) * M_PIf / float(depth) - M_PI_2f);
 
+        // Step 2: Classify lines
+        auto classified_lines = classifyLines(angles, linearray);
+
+        // Step 3: Build featuremap with distance transform
         FeatureMap<float> featuremap{};
-        for (auto const& [angle, indices] : classifyLines(angles, linearray))
-            featuremap[angle] = distanceTransform<float>(linearray(Eigen::all, indices), size)*distanceScale;
+        std::vector<float> angle_vec(angles.begin(), angles.end());
+        size_t num_threads = std::thread::hardware_concurrency();
+
+        std::mutex mtx;
+        auto func = [&](float angle) {
+            Eigen::VectorXi indices = vectorToEigenVector(classified_lines[angle]);
+            RawImage<float> distance_transformed = distanceTransform<float>(linearray(Eigen::all, indices), size) * distanceScale;
+            std::lock_guard<std::mutex> lock(mtx);
+            featuremap[angle] = std::move(distance_transformed);
+        };
+
+        parallelForEach(angle_vec, func, num_threads);
+
+        // Step 4: Propagate orientation
         propagateOrientation(featuremap, coeff);
-        for (auto& [lineAngle, feature]: featuremap)
+
+        // Step 5: Line integral
+        for (auto& [lineAngle, feature] : featuremap)
             lineIntegral(feature, lineAngle);
+
         return featuremap;
     }
 

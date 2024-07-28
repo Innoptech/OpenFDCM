@@ -54,7 +54,7 @@ TEMPLATE_TEST_CASE("PenaltyStrategy Test", "[penalty]", DefaultPenalty, Exponent
         const auto& lengths = getTemplateLengths(templates);
 
         std::vector<Match> const original_matches{
-                Match(0, 1, Mat23{{1,2,3},{4,5,6}}),
+                Match(0, 1.f, Mat23{{1,2,3},{4,5,6}}),
         };
         std::vector<Match> const &penalized_matches = penalize(penalty, original_matches, lengths);
         REQUIRE_FALSE(std::isnan(penalized_matches.front().score));
@@ -64,8 +64,8 @@ TEMPLATE_TEST_CASE("PenaltyStrategy Test", "[penalty]", DefaultPenalty, Exponent
         LineArray tmpl = tests::createLines(4, 4);
         std::vector templates{tmpl};
         std::vector<Match> const original_matches{
-                Match(0, 1, Mat23{{1,2,3},{4,5,6}}),
-                Match(1, 1, Mat23{{4,5,6}, {1,2,3}}),
+                Match(0, 1.f, Mat23{{1,2,3},{4,5,6}}),
+                Match(1, 1.f, Mat23{{4,5,6}, {1,2,3}}),
         };
         REQUIRE_THROWS_AS(penalize(penalty, original_matches, {}), std::out_of_range);
     }
@@ -86,9 +86,9 @@ TEST_CASE("Validate penalty")
         const auto &lengths = getTemplateLengths(templates);
 
         std::vector<Match> const original_matches{
-                Match(0, 1, Mat23{{1, 2, 3},
+                Match(0, 1.f, Mat23{{1, 2, 3},
                                   {4, 5, 6}}),
-                Match(1, 1, Mat23{{4, 5, 6},
+                Match(1, 1.f, Mat23{{4, 5, 6},
                                   {1, 2, 3}}),
         };
         PenaltyStrategy const penalty = DefaultPenalty{};
@@ -116,8 +116,8 @@ TEST_CASE("Validate penalty")
                 translate(tmpl2, Point2{1,2})
         };
         std::vector<Match> const original_matches{
-                Match(0, 1, Mat23{{1,2,3},{4,5,6}}),
-                Match(1, 1, Mat23{{4,5,6}, {1,2,3}}),
+                Match(0, 1.f, Mat23{{1,2,3},{4,5,6}}),
+                Match(1, 1.f, Mat23{{4,5,6}, {1,2,3}}),
         };
         const auto& lengths = getTemplateLengths(templates);
 

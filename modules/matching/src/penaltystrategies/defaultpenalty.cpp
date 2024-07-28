@@ -37,7 +37,7 @@ namespace openfdcm::matching
                 size_t const tmpl_idx = match.tmplIdx;
                 auto len = std::max(templatelengths.at(tmpl_idx), 1e-6f);
                 float const applied_score = match.score/len;
-                applied_penalty.emplace_back(tmpl_idx, applied_score, match.transform);
+                applied_penalty.push_back(Match{int(tmpl_idx), applied_score, match.transform});
             }
             return applied_penalty;
         } catch (const std::out_of_range& e)
