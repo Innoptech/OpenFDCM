@@ -40,6 +40,7 @@ jobs:
           cmake -DOPENFDCM_BUILD_TESTS=ON .. 
           cmake --build .
           ctest .
+        working-directory: ${{ github.workspace }}
 
       - name: Install openfdcm
         run: python -m pip install .
