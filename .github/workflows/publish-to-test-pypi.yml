@@ -39,9 +39,13 @@ jobs:
           cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
           ctest .
 
-      - name: Run Python tests
+      - name: Update DYLD_LIBRARY_PATH
+        if: matrix.os == 'macos-latest'
+        run: echo "/usr/local/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+
+      - name: Run tests
         run: |
-          python3 -m pip install numpy pytest
+          python -m pip install numpy pytest
           pytest
 
   bump_version_and_tag:
