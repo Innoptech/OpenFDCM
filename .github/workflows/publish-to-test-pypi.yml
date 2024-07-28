@@ -31,22 +31,30 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .
+          pip install pybind11
 
       - name: Build C++ project and run C++ tests
         run: |
-          mkdir OpenFDCM/build && cd OpenFDCM/build
-          cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
+          mkdir -p OpenFDCM/build
+          cd OpenFDCM/build
+          cmake -DOPENFDCM_BUILD_TESTS=ON .. 
+          cmake --build .
           ctest .
+
+      - name: Install openfdcm
+        run: python -m pip install .
 
       - name: Update DYLD_LIBRARY_PATH
         if: matrix.os == 'macos-latest'
-        run: echo "/usr/local/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        run: |
+          echo "/usr/local/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/OpenFDCM/build:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
-      - name: Run tests
+      - name: Run Python tests
         run: |
           python -m pip install numpy pytest
           pytest
+
 
   bump_version_and_tag:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
