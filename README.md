@@ -75,5 +75,3 @@ cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
 ctest .
 ```
 
-# Perform object pose estimation
-![DT3 FDCM Maps](docs/static/object_pose_estimation.png)

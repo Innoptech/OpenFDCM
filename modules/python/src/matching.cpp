@@ -29,8 +29,8 @@ SOFTWARE.
 
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
 
-#include "openfdcm/matching/optimizerstrategies/defaultoptimize.h"
-#include "openfdcm/matching/optimizerstrategies/indulgentoptimize.h"
+#include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
+#include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
 
 #include "openfdcm/matching/penaltystrategies/defaultpenalty.h"
 #include "openfdcm/matching/penaltystrategies/exponentialpenalty.h"
@@ -146,16 +146,9 @@ void matching(py::module_ &m) {
             });
 
     py::class_<DefaultMatch>(m, "DefaultMatch")
-            .def(py::init<size_t, float, float, float>())
-            .def("get_depth", &DefaultMatch::getDepth)
-            .def("get_coeff", &DefaultMatch::getCoeff)
-            .def("get_scene_ratio", &DefaultMatch::getSceneRatio)
-            .def("get_scene_padding", &DefaultMatch::getScenePadding)
+            .def(py::init<>())
             .def("__repr__", [](const DefaultMatch &a) {
-                return "<DefaultMatch: depth=" + std::to_string(a.getDepth()) +
-                       ", coeff=" + std::to_string(a.getCoeff()) +
-                       ", scene ratio=" + std::to_string(a.getSceneRatio()) +
-                       ", scene padding=" + std::to_string(a.getScenePadding()) + ">";
+                return "<DefaultMatch>";
             });
 
     // Register implicit conversion using pybind11 type casters
@@ -177,10 +170,10 @@ void matching(py::module_ &m) {
     m.def("search", [](const MatchStrategy &matcher,
                        const SearchStrategy &searcher,
                        const OptimizeStrategy &optimizer,
-                       std::vector<Eigen::Matrix<float, 4, -1>> const& templates,
-                       Eigen::Matrix<float, 4, -1> const& scene)
+                       const FeatureMap& featuremap,
+                       std::vector<core::LineArray> const& templates)
           {
-              return matching::search(matcher, searcher, optimizer, templates, scene);
+              return matching::search(matcher, searcher, optimizer, featuremap, templates);
           },
           "matcher"_a, "searcher"_a, "optimizer"_a, "templates"_a, "scene"_a);
 }

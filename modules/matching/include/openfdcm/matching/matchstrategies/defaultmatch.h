@@ -31,31 +31,10 @@ namespace openfdcm::matching
     class DefaultMatch : public MatchStrategyInstance
     {
     public:
-        DefaultMatch(size_t depth, float coeff, float sceneRatio=1.f, float scenePadding=1.f)
-        : depth_{depth}, coeff_{coeff}, sceneRatio_{sceneRatio}, scenePadding_{scenePadding}
-        {}
-        [[nodiscard]] size_t getDepth() const noexcept {return depth_;}
-        [[nodiscard]] float getCoeff() const noexcept {return coeff_;}
-        [[nodiscard]] float getSceneRatio() const noexcept {return sceneRatio_;}
-        [[nodiscard]] float getScenePadding() const noexcept {return scenePadding_;}
+        DefaultMatch() = default;
     private:
-        size_t depth_;
-        float coeff_, sceneRatio_, scenePadding_;
     };
 
-    struct SceneShift
-    {
-        core::Point2 translation;
-        core::Size sceneSize;
-    };
 
-    /**
-     * @brief Find the transformation to center a scene in an positive set of boundaries
-     * given the image area ratio (scene size vs image size)
-     * @param scene The scene lines
-     * @param scene_padding The ratio between the original scene area and the image scene area
-     * @return The resulting SceneShift object
-     */
-    SceneShift getSceneCenteredTranslation(core::LineArray const& scene, float scene_padding) noexcept;
 } // namespace openfdcm::matching
 #endif //OPENFDCM_DEFAULTMATCH_H

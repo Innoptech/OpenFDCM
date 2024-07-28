@@ -23,7 +23,8 @@ SOFTWARE.
  */
 
 #include "catch2/catch_test_macros.hpp"
-#include "openfdcm/matching/optimizerstrategies/indulgentoptimize.h"
+#include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
+#include "openfdcm/matching/featuremaps/dt3cpu.h"
 
 using namespace openfdcm::core;
 using namespace openfdcm::matching;
@@ -51,9 +52,9 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         };
         // A tmpl line is already aligned and centered with a scene line
         Point2 const align_vec{1,0};
-        FeatureMap<float> const map = buildFeaturemap(4, Size{20,20}, 20*20, scene);
+        Dt3Cpu featuremap{scene, Dt3CpuParameters{4, 20*20}};
 
-        auto optimal_translation = optimize(optimizer, tmpl, align_vec, map);
+        auto optimal_translation = optimize(optimizer, tmpl, align_vec, featuremap);
         REQUIRE(optimal_translation.has_value());
 
         OptimalTranslation const& optrans = optimal_translation.value();
@@ -77,9 +78,9 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         // The tmpl line is already aligned but not centered with the scene line
         // The minimal score correspond to the right most position where the tmpl line overlap all the scene line
         Point2 const align_vec{1,0};
-        FeatureMap<float> const map = buildFeaturemap(4, Size{8,1}, 1, scene);
+        Dt3Cpu featuremap{scene, Dt3CpuParameters{4, 1}};
 
-        auto optimal_translation = optimize(optimizer, tmpl, align_vec, map);
+        auto optimal_translation = optimize(optimizer, tmpl, align_vec, featuremap);
         REQUIRE(optimal_translation.has_value());
 
         OptimalTranslation const& optrans = optimal_translation.value();
@@ -101,9 +102,9 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
                 {0}
         };
         Point2 const align_vec{1,0};
-        FeatureMap<float> const map = buildFeaturemap(4, Size{2,2}, 1, scene);
+        Dt3Cpu featuremap{scene, Dt3CpuParameters{4, 1}};
 
-        auto optimal_translation = optimize(optimizer, tmpl, align_vec, map);
+        auto optimal_translation = optimize(optimizer, tmpl, align_vec, featuremap);
         REQUIRE_FALSE(optimal_translation.has_value());
     }
 }

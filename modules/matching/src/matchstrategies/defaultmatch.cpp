@@ -28,51 +28,28 @@ using namespace openfdcm::core;
 
 namespace openfdcm::matching
 {
-    SceneShift getSceneCenteredTranslation(LineArray const& scene, float scene_padding) noexcept
-    {
-        auto const& [min_point, max_point] = minmaxPoint(scene);
-        Point2 const distanceminmax = max_point - min_point;
-        float const corrected_ratio = std::max(1.f, scene_padding);
-        Point2 const required_max = corrected_ratio * distanceminmax.maxCoeff() * Point2{1.f, 1.f};
-        Point2 const center_diff = required_max / 2.f - (max_point + min_point) / 2.f;
-        return {center_diff, (required_max.array() + 1.f).ceil().cast<size_t>()};
-    }
 
     template<>
     std::vector<Match> search(const DefaultMatch& matcher,
                               const SearchStrategy& searcher,
                               const OptimizeStrategy& optimizer,
-                              std::vector<LineArray> const& templates,
-                              LineArray const& originalScene)
+                              const FeatureMap& featuremap,
+                              std::vector<LineArray> const& templates)
     {
-        if (originalScene.size() == 0 || templates.empty())
+        if (templates.empty())
             return {};
 
+        LineArray const& originalScene = featuremap.getSceneLines();
         std::vector<Match> all_matches{};
-
-        // Apply scene ratio
-        const auto sceneRatio = matcher.getSceneRatio();
-        const auto scene = sceneRatio * originalScene;
-
-        // Shift the scene so that all scene lines are greater than 0.
-        // DT3 requires that all line points have positive values
-        SceneShift const& scene_shift = getSceneCenteredTranslation(scene, matcher.getScenePadding());
-        LineArray const& shifted_scene = translate(scene, scene_shift.translation);
-
-        // Build DT3 feature map
-        const auto distanceScale = 1.f / sceneRatio; // Removes the effect of scaling down the scene
-        auto const& featuremap = buildFeaturemap(
-                matcher.getDepth(), scene_shift.sceneSize, matcher.getCoeff(), shifted_scene, distanceScale);
 
         // Matching
         for (size_t i = 0; i < templates.size(); ++i)
         {
-            const LineArray& originalTmpl = templates.at(i);
-            if (originalTmpl.size() == 0) continue;
-            const auto& tmpl = sceneRatio * originalTmpl;
+            const LineArray& tmpl = templates.at(i);
+            if (tmpl.size() == 0) continue;
             for (SearchCombination const& combination : establishSearchStrategy(searcher, tmpl, originalScene))
             {
-                const auto& scene_line = getLine(shifted_scene, combination.getSceneLineIdx());
+                const auto& scene_line = getLine(originalScene, combination.getSceneLineIdx());
                 const auto& tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
                 const auto& align_vec = normalize(scene_line);
                 for (auto const& initial_transf : align(tmpl_line, scene_line))
@@ -83,9 +60,7 @@ namespace openfdcm::matching
                     if (result.has_value())
                     {
                         OptimalTranslation const& opt_transl = result.value();
-                        Mat23 combined = combine(-scene_shift.translation,
-                                                 combine(opt_transl.translation, initial_transf));
-                        combined.block<2, 1>(0, 2) /= sceneRatio;
+                        Mat23 combined = combine(opt_transl.translation, initial_transf);
                         all_matches.push_back(
                                 Match{int(i), opt_transl.score, combined}
                         );

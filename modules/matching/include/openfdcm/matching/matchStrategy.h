@@ -61,8 +61,8 @@ namespace openfdcm::matching
      * @return A vector containing all the sorted matches by score (lowest to highest)
      */
     template<IsMatchStrategyInstance T>
-    std::vector<Match>  search(const T & matcher, const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
-                               std::vector<core::LineArray> const& templates, core::LineArray const& original_scene);
+    std::vector<Match> search(const T & matcher, const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
+                              const FeatureMap& featuremap, std::vector<core::LineArray> const& templates);
 
 
     namespace detail {
@@ -72,8 +72,8 @@ namespace openfdcm::matching
             [[nodiscard]] virtual std::unique_ptr<MatcherConcept> clone() const = 0;
             [[nodiscard]] virtual std::vector<Match> search(const SearchStrategy &searcher,
                                                             const OptimizeStrategy &optimizer,
-                                                            std::vector<core::LineArray> const& templates,
-                                                            core::LineArray const& scene) const = 0;
+                                                            const FeatureMap& featuremap,
+                                                            std::vector<core::LineArray> const& templates) const = 0;
         };
 
         template<IsMatchStrategyInstance T>
@@ -87,10 +87,11 @@ namespace openfdcm::matching
                 return std::make_unique<MatcherModel<T>>(*this);
             }
 
-            [[nodiscard]] std::vector<Match> search(const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
-                    std::vector<core::LineArray> const& templates, core::LineArray const& scene) const final
+            [[nodiscard]] std::vector<Match>
+                    search(const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
+                           const FeatureMap& featuremap, std::vector<core::LineArray> const& templates) const final
             {
-                return openfdcm::matching::search(object, searcher, optimizer, templates, scene);
+                return openfdcm::matching::search(object, searcher, optimizer, featuremap, templates);
             }
 
             T object;
@@ -113,9 +114,9 @@ namespace openfdcm::matching
         MatchStrategy& operator=(MatchStrategy&& other) noexcept = default;
 
         [[nodiscard]] std::vector<Match> search(const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
-                std::vector<core::LineArray> const& templates, core::LineArray const& scene) const
+                                                const FeatureMap& featuremap, std::vector<core::LineArray> const& templates) const
         {
-            return this->pimpl->search(searcher, optimizer, templates, scene);
+            return this->pimpl->search(searcher, optimizer, featuremap, templates);
         }
     };
 
@@ -135,10 +136,10 @@ namespace openfdcm::matching
     inline std::vector<Match> search(const MatchStrategy &matcher,
                                      const SearchStrategy &searcher,
                                      const OptimizeStrategy &optimizer,
-                                     std::vector<core::LineArray> const& templates,
-                                     core::LineArray const& scene)
+                                     const FeatureMap& featuremap,
+                                     std::vector<core::LineArray> const& templates)
     {
-        return matcher.search(searcher, optimizer, templates, scene);
+        return matcher.search(searcher, optimizer, featuremap, templates);
     }
 
     /**
