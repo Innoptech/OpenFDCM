@@ -26,7 +26,7 @@ SOFTWARE.
 #define OPENFDCM_OPTIMIZESTRATEGY_H
 #include <memory>
 #include <optional>
-#include "openfdcm/core/dt3.h"
+#include "openfdcm/matching/featuremap.h"
 
 namespace openfdcm::matching
 {
@@ -61,7 +61,7 @@ namespace openfdcm::matching
      */
     template<IsOptimizeStrategyInstance T>
     std::optional<OptimalTranslation> optimize(T const& optimizer, const core::LineArray& tmpl,
-                                               core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap);
+                                               core::Point2 const& align_vec, FeatureMap const& featuremap);
 
     namespace detail
     {
@@ -70,7 +70,7 @@ namespace openfdcm::matching
             virtual ~OptimizeStrategyConcept() noexcept = default;
             [[nodiscard]] virtual std::unique_ptr<OptimizeStrategyConcept> clone() const = 0;
             [[nodiscard]] virtual std::optional<OptimalTranslation> optimize(const core::LineArray& tmpl
-                    , core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap) const = 0;
+                    , core::Point2 const& align_vec, FeatureMap const& featuremap) const = 0;
         };
 
         template<IsOptimizeStrategyInstance T>
@@ -85,7 +85,7 @@ namespace openfdcm::matching
             }
 
             [[nodiscard]] std::optional<OptimalTranslation> optimize(const core::LineArray& tmpl
-                    , core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap) const final
+                    , core::Point2 const& align_vec, FeatureMap const& featuremap) const final
             {
                 return openfdcm::matching::optimize(object, tmpl, align_vec, featuremap);
             }
@@ -110,7 +110,7 @@ namespace openfdcm::matching
         OptimizeStrategy& operator=(OptimizeStrategy&& other) noexcept = default;
 
         [[nodiscard]] std::optional<OptimalTranslation> optimize(const core::LineArray& tmpl
-                , core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap) const
+                , core::Point2 const& align_vec, FeatureMap const& featuremap) const
         {
             return this->pimpl->optimize(tmpl, align_vec, featuremap);
         }
@@ -129,7 +129,7 @@ namespace openfdcm::matching
      * @return A tuple containing the score and the final translation
      */
     inline std::optional<OptimalTranslation> optimize(const OptimizeStrategy &optimizer, const core::LineArray& tmpl,
-                                                      const core::Point2 &align_vec, const core::FeatureMap<float> &featuremap)
+                                                      const core::Point2 &align_vec, const FeatureMap &featuremap)
     {
         return optimizer.optimize(tmpl, align_vec, featuremap);
     }
