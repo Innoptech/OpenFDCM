@@ -14,6 +14,7 @@ A modern C++ open implementation of Fast Directional Chamfer Matching with few i
 - [x] Python Binding
 - [x] Usage Examples
 - [ ] GPU support using GL ES shaders for full vendors support
+- [ ] Build python wheels for windows-latest
 
 # Python usage
 
