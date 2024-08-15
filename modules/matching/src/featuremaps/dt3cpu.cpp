@@ -86,10 +86,11 @@ namespace openfdcm::matching
             propagate(m, one_and_a_half_cycle_backward, -1);
         }
 
-        inline Eigen::VectorXi vectorToEigenVector(const std::vector<long> &vec) noexcept {
+        template<typename Vec>
+        inline Eigen::VectorXi vectorToEigenVector(const Vec &vec) noexcept {
             Eigen::VectorXi eigenVec(vec.size());
-            for (Eigen::Index i = 0; i < vec.size(); ++i) {
-                eigenVec[i] = vec[i];
+            for (Eigen::Index i{0}; i < static_cast<Eigen::Index>(vec.size()); ++i) {
+                eigenVec[i] = vec[static_cast<typename Vec::value_type>(i)];
             }
             return eigenVec;
         }
