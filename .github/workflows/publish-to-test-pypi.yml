@@ -81,9 +81,9 @@ jobs:
       - uses: actions/setup-python@v5
       - name: Print the arch and system
         run: |
-          python3 -c "import platform; print(f'System: {platform.system()}'); print(f'Architecture: {platform.architecture()[0]}')"
+          python -c "import platform; print(f'System: {platform.system()}'); print(f'Architecture: {platform.architecture()[0]}')"
       - name: Install cibuildwheel
-        run: python3 -m pip install cibuildwheel==2.20.0
+        run: python -m pip install cibuildwheel==2.20.0
       - name: Build wheels
         run: CMAKE_GENERATOR=Ninja python3 -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v4
