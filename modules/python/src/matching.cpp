@@ -1,4 +1,3 @@
-
 /*
 MIT License
 
@@ -27,10 +26,12 @@ SOFTWARE.
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
 
+#include "openfdcm/matching/featuremaps/dt3cpu.h"
+
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
 
-#include "openfdcm/matching/optimizerstrategies/defaultoptimize.h"
-#include "openfdcm/matching/optimizerstrategies/indulgentoptimize.h"
+#include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
+#include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
 
 #include "openfdcm/matching/penaltystrategies/defaultpenalty.h"
 #include "openfdcm/matching/penaltystrategies/exponentialpenalty.h"
@@ -48,6 +49,64 @@ using namespace openfdcm::matching;
 
 void matching(py::module_ &m) {
     // ---------------------------------------------------------
+    // Featuremaps
+    // ---------------------------------------------------------
+    py::class_<FeatureMap>(m, "FeatureMap")
+            .def(py::init<const Dt3Cpu&>())
+            .def("__repr__", [](const FeatureMap &a) {
+                return "<FeatureMap>";
+            });
+
+    py::class_<Dt3Cpu>(m, "Dt3Cpu")
+            .def(py::init<detail::Dt3CpuMap<float>, core::Point2, core::Size>())
+            .def("get_scene_translation", &Dt3Cpu::getSceneTranslation)
+            .def("get_feature_size", &Dt3Cpu::getFeatureSize)
+            .def("get_dt3_map", &Dt3Cpu::getDt3Map)
+            .def("__repr__", [](const Dt3Cpu &a) {
+                std::string repr = "<Dt3Cpu: scene translation=(" +
+                                   std::to_string(a.getSceneTranslation().x()) + ", " +
+                                   std::to_string(a.getSceneTranslation().y()) + "), " +
+                                   "feature size=(" + std::to_string(a.getFeatureSize().x()) + ", " +
+                                   std::to_string(a.getFeatureSize().y()) + ")>";
+                return repr;
+            });
+
+    py::class_<BS::thread_pool, std::shared_ptr<BS::thread_pool>>(m, "ThreadPool")
+            // Use shared pointers for the constructors
+            .def(py::init<>())  // Default constructor
+            .def(py::init<BS::concurrency_t>(), "num_threads"_a)  // Constructor with num_threads
+            .def("get_tasks_queued", &BS::thread_pool::get_tasks_queued, "Get the number of tasks queued.")
+            .def("get_tasks_running", &BS::thread_pool::get_tasks_running, "Get the number of tasks currently running.")
+            .def("get_tasks_total", &BS::thread_pool::get_tasks_total, "Get the total number of unfinished tasks.")
+            .def("get_thread_count", &BS::thread_pool::get_thread_count, "Get the number of threads in the pool.")
+            .def("get_thread_ids", &BS::thread_pool::get_thread_ids, "Get the thread IDs for all threads in the pool.")
+            .def("purge", &BS::thread_pool::purge, "Purge all tasks waiting in the queue.")
+                    // __repr__ method
+            .def("__repr__", [](const BS::thread_pool &tp) {
+                return "<ThreadPool: threads=" + std::to_string(tp.get_thread_count()) +
+                       ", tasks queued=" + std::to_string(tp.get_tasks_queued()) +
+                       ", tasks running=" + std::to_string(tp.get_tasks_running()) + ">";
+            });
+
+    py::class_<Dt3CpuParameters>(m, "Dt3CpuParameters")
+            .def(py::init<size_t, float, float>(), "depth"_a=30, "dt3Coeff"_a=5.f, "padding"_a=2.2f)
+            .def_readwrite("depth", &Dt3CpuParameters::depth)
+            .def_readwrite("dt3_coeff", &Dt3CpuParameters::dt3Coeff)
+            .def_readwrite("padding", &Dt3CpuParameters::padding)
+            .def("__repr__", [](const Dt3CpuParameters &p) {
+                return "<Dt3CpuParameters: depth=" + std::to_string(p.depth) +
+                       ", dt3_coeff=" + std::to_string(p.dt3Coeff) +
+                       ", padding=" + std::to_string(p.padding) + ">";
+            });
+
+    m.def("build_cpu_featuremap", &buildCpuFeaturemap,
+          "scene"_a, "params"_a=Dt3CpuParameters{}, "pool"_a=std::make_shared<BS::thread_pool>(),
+          "Builds the Dt3Cpu featuremap given a scene, parameters, and an optional thread pool."
+    );
+
+    py::implicitly_convertible<Dt3Cpu, FeatureMap>();
+
+    // ---------------------------------------------------------
     // 1D optimize strategies
     // ---------------------------------------------------------
     py::class_<OptimizeStrategy>(m, "OptimizeStrategy")
@@ -58,16 +117,28 @@ void matching(py::module_ &m) {
             });
 
     py::class_<DefaultOptimize>(m, "DefaultOptimize")
-            .def(py::init<>())
+            .def(py::init<std::shared_ptr<BS::thread_pool>>(), "pool"_a = std::make_shared<BS::thread_pool>(),
+                 "Constructor that accepts a thread pool with an optional default pool.")
+            .def(py::init<BS::concurrency_t>(), "num_threads"_a, "Constructor that accepts a number of threads.")
+            .def("get_pool", &DefaultOptimize::getPool, "Returns the thread pool as a shared pointer.")
             .def("__repr__", [](const DefaultOptimize &a) {
                 return "<DefaultOptimize>";
             });
 
     py::class_<IndulgentOptimize>(m, "IndulgentOptimize")
-            .def(py::init<uint32_t>())
-            .def("get_number_of_passthroughs", &IndulgentOptimize::getNumberOfPassthroughs)
+            .def(py::init<uint32_t, std::shared_ptr<BS::thread_pool>>(),
+                 "indulgent_number_of_passthroughs"_a,
+                 "pool"_a = std::make_shared<BS::thread_pool>(),
+                 "Constructor that accepts the number of passthroughs and an optional thread pool.")
+            .def(py::init<uint32_t, BS::concurrency_t>(),
+                 "indulgent_number_of_passthroughs"_a,
+                 "num_threads"_a, "Constructor that accepts a number of threads.")
+            .def("get_number_of_passthroughs", &IndulgentOptimize::getNumberOfPassthroughs,
+                 "Get the number of indulgent passthroughs.")
+            .def("get_pool", &IndulgentOptimize::getPool, "Returns the thread pool as a shared pointer.")
             .def("__repr__", [](const IndulgentOptimize &a) {
-                return "<IndulgentOptimize: number of passthroughs=" + std::to_string(a.getNumberOfPassthroughs()) + ">";
+                return "<IndulgentOptimize: number_of_passthroughs=" +
+                       std::to_string(a.getNumberOfPassthroughs()) + ">";
             });
 
     py::implicitly_convertible<DefaultOptimize, OptimizeStrategy>();
@@ -146,16 +217,9 @@ void matching(py::module_ &m) {
             });
 
     py::class_<DefaultMatch>(m, "DefaultMatch")
-            .def(py::init<size_t, float, float, float>())
-            .def("get_depth", &DefaultMatch::getDepth)
-            .def("get_coeff", &DefaultMatch::getCoeff)
-            .def("get_scene_ratio", &DefaultMatch::getSceneRatio)
-            .def("get_scene_padding", &DefaultMatch::getScenePadding)
+            .def(py::init<>())
             .def("__repr__", [](const DefaultMatch &a) {
-                return "<DefaultMatch: depth=" + std::to_string(a.getDepth()) +
-                       ", coeff=" + std::to_string(a.getCoeff()) +
-                       ", scene ratio=" + std::to_string(a.getSceneRatio()) +
-                       ", scene padding=" + std::to_string(a.getScenePadding()) + ">";
+                return "<DefaultMatch>";
             });
 
     // Register implicit conversion using pybind11 type casters
@@ -177,10 +241,11 @@ void matching(py::module_ &m) {
     m.def("search", [](const MatchStrategy &matcher,
                        const SearchStrategy &searcher,
                        const OptimizeStrategy &optimizer,
-                       std::vector<Eigen::Matrix<float, 4, -1>> const& templates,
-                       Eigen::Matrix<float, 4, -1> const& scene)
+                       const FeatureMap &featuremap,
+                       const std::vector<core::LineArray>& templates,
+                       const core::LineArray& scene)
           {
-              return matching::search(matcher, searcher, optimizer, templates, scene);
+              return matching::search(matcher, searcher, optimizer, featuremap, templates, scene);
           },
-          "matcher"_a, "searcher"_a, "optimizer"_a, "templates"_a, "scene"_a);
+          "matcher"_a, "searcher"_a, "optimizer"_a, "featuremap"_a, "templates"_a, "scene"_a);
 }

@@ -37,6 +37,7 @@ test-skip = ["*universal2:arm64", "pp*", "cp{38,39,310,311,312}-manylinux_i686",
 before-build = "rm -rf {project}/build"
 
 [tool.poetry.dependencies]
+threadpool = "v4.1.0"
 eigen3 = "3.4.0"
 pybind11 = "v2.13.1"
 catch2 = "v3.4.0"

@@ -26,60 +26,24 @@ SOFTWARE.
 #include "test-utils/utils.h"
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
 #include "openfdcm/matching/searchstrategies/defaultsearch.h"
-#include "openfdcm/matching/optimizerstrategies/defaultoptimize.h"
+#include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
+#include "openfdcm/matching/featuremaps/dt3cpu.h"
 
 using namespace openfdcm::core;
 using namespace openfdcm::matching;
 
-TEST_CASE("getSceneCenteredTranslation")
-{
-    SECTION("Centered scene")
-    {
-        // Center a scene in an image given the final image area ratio (scene size vs image size)
-        const LineArray scene{
-                {0, 0},
-                {0, 0},
-                {9, 0},
-                {0, 9}
-        };
-        float const scene_padding{1.f};
-        SceneShift const &scene_shift = getSceneCenteredTranslation(scene, scene_padding);
-        REQUIRE(allClose(scene_shift.sceneSize, Size{10, 10}));
-        REQUIRE(allClose(scene_shift.translation, Point2{0, 0}));
 
-        auto const& [min_point, max_point] = minmaxPoint(scene);
-        Point2 const new_center = ((max_point + scene_shift.translation) +
-                (min_point + scene_shift.translation))/2.f;
-        REQUIRE(allClose(new_center, (scene_shift.sceneSize.cast<float>().array()-1.f)/2.f));
-    }
-    SECTION("Uncentered scene")
-    {
-        const LineArray scene{
-                {-6, 0},
-                {1, -10},
-                {4, 0},
-                {1, 10}
-        };
-        float const scene_padding{2.f};
-        SceneShift const &scene_shift = getSceneCenteredTranslation(scene, scene_padding);
-        REQUIRE(allClose(scene_shift.sceneSize, Size{41, 41}));
-        REQUIRE(allClose(scene_shift.translation, Point2{21, 20}));
-
-        auto const& [min_point, max_point] = minmaxPoint(scene);
-        Point2 const new_center = ((max_point + scene_shift.translation) +
-                                   (min_point + scene_shift.translation))/2.f;
-        REQUIRE(allClose(new_center, (scene_shift.sceneSize.cast<float>().array()-1.f)/2.f));
-    }
-}
-
-void run_test(float scene_ratio) {
-    size_t const max_tmpl_lines{4}, max_scene_lines{10};
+void run_test(float scene_ratio, BS::concurrency_t num_threads) {
+    size_t const max_tmpl_lines{3}, max_scene_lines{3};
     size_t const depth{30};
     float const scene_padding{2.2f};
     float const coeff{5.f};
+
+    auto threadpool = std::make_shared<BS::thread_pool>(num_threads);
+
     DefaultSearch searchStrategy{max_tmpl_lines, max_scene_lines};
-    DefaultOptimize optimizerStrategy{};
-    DefaultMatch matcher{depth, coeff, scene_ratio, scene_padding};
+    DefaultOptimize optimizerStrategy{threadpool};
+    DefaultMatch matcher{};
     size_t const numberOfLines{10};
     size_t const lineLength{100};
     LineArray tmpl = tests::createLines(numberOfLines, lineLength);
@@ -88,32 +52,37 @@ void run_test(float scene_ratio) {
     {
         Mat23 scene_transform{{-1, 0, lineLength}, {0, -1, lineLength}};
         LineArray scene = transform(tmpl, scene_transform);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, {tmpl}, scene);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
         REQUIRE(matches.size() == std::min(max_tmpl_lines, numberOfLines) * std::min(numberOfLines, max_scene_lines) * 2);
         REQUIRE(allClose(scene_transform.block<2, 2>(0, 0), best_match_rotation, 1e-5));
         REQUIRE(allClose(scene_transform.block<2, 1>(0, 2), best_match_translation, 1e0 * 1 / scene_ratio));
+        REQUIRE(matches[0].tmplIdx == 0);
     }
 
     // Test for translation
     {
         Mat23 scene_transform{{1, 0, 0}, {0, 1, 0}};
         LineArray scene = transform(tmpl, scene_transform);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, {tmpl}, scene);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
         REQUIRE(matches.size() == max_tmpl_lines * max_scene_lines * 2);
         REQUIRE(allClose(scene_transform.block<2, 2>(0, 0), best_match_rotation, 1e-5));
         REQUIRE(allClose(scene_transform.block<2, 1>(0, 2), best_match_translation, 1e0 * 1 / scene_ratio));
+        REQUIRE(matches[0].tmplIdx == 0);
     }
 
     // Test for empty scene
     {
         LineArray scene(4, 0);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, {tmpl}, scene);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         REQUIRE(matches.empty());
     }
 
@@ -121,7 +90,8 @@ void run_test(float scene_ratio) {
     {
         std::vector<LineArray> templates;
         LineArray scene = tmpl;
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
         REQUIRE(matches.empty());
     }
 
@@ -129,15 +99,18 @@ void run_test(float scene_ratio) {
     {
         std::vector<LineArray> templates{LineArray(4, 0)};
         LineArray scene = tmpl;
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, templates, scene);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
         REQUIRE(matches.empty());
     }
 }
 
 TEST_CASE("DefaultMatch") {
-    run_test(1.0f);
+    run_test(1.0f, 1);
+    run_test(1.0f, 2);
 }
 
 TEST_CASE("Scale down scene") {
-    run_test(0.3f);
+    run_test(0.3f, 1);
+    run_test(0.3f, 2);
 }

@@ -26,7 +26,7 @@ SOFTWARE.
 #define OPENFDCM_OPTIMIZESTRATEGY_H
 #include <memory>
 #include <optional>
-#include "openfdcm/core/dt3.h"
+#include "openfdcm/matching/featuremap.h"
 
 namespace openfdcm::matching
 {
@@ -55,13 +55,13 @@ namespace openfdcm::matching
      * @tparam T The optimizer type
      * @param optimizer The optimizer used to find the optimal translation
      * @param tmpl The evaluated template
-     * @param align_vec The alignment vector
+     * @param alignments The alignment vector for each template
      * @param featuremap The featuremap used to evaluate the template for a given translation
      * @return A tuple containing the score and the final translation
      */
     template<IsOptimizeStrategyInstance T>
-    std::optional<OptimalTranslation> optimize(T const& optimizer, const core::LineArray& tmpl,
-                                               core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap);
+    std::vector<std::optional<OptimalTranslation>> optimize(T const& optimizer, const std::vector<core::LineArray>& templates,
+                                                std::vector<core::Point2> const& alignments, FeatureMap const& featuremap);
 
     namespace detail
     {
@@ -69,8 +69,9 @@ namespace openfdcm::matching
         {
             virtual ~OptimizeStrategyConcept() noexcept = default;
             [[nodiscard]] virtual std::unique_ptr<OptimizeStrategyConcept> clone() const = 0;
-            [[nodiscard]] virtual std::optional<OptimalTranslation> optimize(const core::LineArray& tmpl
-                    , core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap) const = 0;
+            [[nodiscard]] virtual std::vector<std::optional<OptimalTranslation>>
+            optimize(const std::vector<core::LineArray>& templates
+                    ,  std::vector<core::Point2> const& alignments, FeatureMap const& featuremap) const = 0;
         };
 
         template<IsOptimizeStrategyInstance T>
@@ -84,10 +85,10 @@ namespace openfdcm::matching
                 return std::make_unique<OptimizeStrategyModel<T>>(*this);
             }
 
-            [[nodiscard]] std::optional<OptimalTranslation> optimize(const core::LineArray& tmpl
-                    , core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap) const final
+            [[nodiscard]] std::vector<std::optional<OptimalTranslation>> optimize(const std::vector<core::LineArray>& templates
+                    ,  std::vector<core::Point2> const& alignments, FeatureMap const& featuremap) const final
             {
-                return openfdcm::matching::optimize(object, tmpl, align_vec, featuremap);
+                return openfdcm::matching::optimize(object, templates, alignments, featuremap);
             }
 
             T object;
@@ -109,10 +110,10 @@ namespace openfdcm::matching
         OptimizeStrategy(OptimizeStrategy&& other) noexcept = default;
         OptimizeStrategy& operator=(OptimizeStrategy&& other) noexcept = default;
 
-        [[nodiscard]] std::optional<OptimalTranslation> optimize(const core::LineArray& tmpl
-                , core::Point2 const& align_vec, core::FeatureMap<float> const& featuremap) const
+        [[nodiscard]] auto optimize(const std::vector<core::LineArray>& templates
+                ,  std::vector<core::Point2> const& alignments, FeatureMap const& featuremap) const
         {
-            return this->pimpl->optimize(tmpl, align_vec, featuremap);
+            return this->pimpl->optimize(templates, alignments, featuremap);
         }
     };
 
@@ -124,14 +125,15 @@ namespace openfdcm::matching
      * @brief Perform the 1D optimization by translating the template along the given alignment vector
      * @param optimizer The optimizer used to find the optimal translation
      * @param tmpl The evaluated template
-     * @param align_vec The alignment vector
+     * @param alignments The alignment vector for each template
      * @param featuremap The featuremap used to evaluate the template for a given translation
-     * @return A tuple containing the score and the final translation
+     * @return A tuple containing the score and the final translation for each template
      */
-    inline std::optional<OptimalTranslation> optimize(const OptimizeStrategy &optimizer, const core::LineArray& tmpl,
-                                                      const core::Point2 &align_vec, const core::FeatureMap<float> &featuremap)
+    inline std::vector<std::optional<OptimalTranslation>>
+    optimize(const OptimizeStrategy &optimizer, const std::vector<core::LineArray>& templates,
+             const  std::vector<core::Point2> &alignments, const FeatureMap &featuremap)
     {
-        return optimizer.optimize(tmpl, align_vec, featuremap);
+        return optimizer.optimize(templates, alignments, featuremap);
     }
 } // namespace openfdcm
 

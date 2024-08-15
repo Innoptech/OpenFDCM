@@ -17,22 +17,32 @@ A modern C++ open implementation of Fast Directional Chamfer Matching with few i
 
 # Python usage
 
+### Install
+`pip install openfdcm` or `pip install -U git+https://github.com/Innoptech/OpenFDCM@main`
+
+### Template matching example
 ```python
+import openfdcm
+
 templates = # A list of 4xN array where each array is a template represented as N lines [x1, y1, x2, y2]^T
 scene = # A 4xM array representing the M scene lines
 
 # Perform template matching
 max_tmpl_lines, max_scene_lines = 4, 4  # Combinatory search parameters.
 depth = 30              # The [0, pi] discretization.
-scene_ratio = 1.0       # The image size ratio used for FDCM algorithm. Reduce size for faster but less precise search.
-scene_padding = 1.0     # Pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
+scene_ratio = 1.0       # The image size ratio used for FDCM algorithm. Relative to the scene lines length.
+scene_padding = 1.5     # Pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
 coeff = 5.0             # A weighting factor to enhance the angular cost vs distance cost in FDCM algorithm.
+num_threads = 4
 
-search_strategy = DefaultSearch(max_tmpl_lines, max_scene_lines)
-optimizer_strategy = DefaultOptimize()
-matcher = DefaultMatch(depth, coeff, scene_ratio, scene_padding)
+threadpool = openfdcm.ThreadPool(num_threads)
+search_strategy = openfdcm.DefaultSearch(max_tmpl_lines, max_scene_lines)
+optimizer_strategy = openfdcm.DefaultOptimize(threadpool)
+matcher = openfdcm.DefaultMatch()
 
-matches = search(matcher, search_strategy, optimizer_strategy, templates, scene)
+featuremap_params = openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff, padding=scene_padding)
+featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
+matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, templates, scene)
 
 best_match = matches[0]                 # Best match (lower score) is first
 best_match_id = best_match.tmpl_idx
@@ -45,16 +55,16 @@ For a complete example in python, see [templatematching.py](examples/templatemat
 
 
 # C++ usage
-## Requirements
+### Requirements
 C++20 or higher.
 
-## Integrate to your codebase
+### Integrate to your codebase
 Include this repository with CMAKE Fetchcontent and link your executable/library to `openfdcm::matching library`.   
 Choose weither you want to fetch a specific branch or tag using `GIT_TAG`. Use the `main` branch to keep updated with the latest improvements.
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
-    openstl
+    openfdcm
     GIT_REPOSITORY https://github.com/Innoptech/OpenFDCM.git
     GIT_TAG main
     GIT_SHALLOW TRUE
@@ -71,5 +81,3 @@ cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
 ctest .
 ```
 
-# Perform object pose estimation
-![DT3 FDCM Maps](docs/static/object_pose_estimation.png)

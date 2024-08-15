@@ -20,7 +20,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
- */
+*/
 
 #include "openfdcm/matching/matchstrategies/defaultmatch.h"
 
@@ -28,79 +28,68 @@ using namespace openfdcm::core;
 
 namespace openfdcm::matching
 {
-    SceneShift getSceneCenteredTranslation(LineArray const& scene, float scene_padding) noexcept
-    {
-        auto const& [min_point, max_point] = minmaxPoint(scene);
-        Point2 const distanceminmax = max_point - min_point;
-        float const corrected_ratio = std::max(1.f, scene_padding);
-        Point2 const required_max = corrected_ratio*distanceminmax.maxCoeff()*Point2{1.f,1.f};
-        Point2 const center_diff =  required_max/2.f - (max_point+min_point)/2.f;
-        return {center_diff, (required_max.array()+1.f).ceil().cast<size_t>()};
-    }
 
     template<>
-    std::vector<Match> search(const DefaultMatch & matcher,
-                              const SearchStrategy &searcher,
-                              const OptimizeStrategy &optimizer,
+    std::vector<Match> search(const DefaultMatch& matcher,
+                              const SearchStrategy& searcher,
+                              const OptimizeStrategy& optimizer,
+                              const FeatureMap& featuremap,
                               std::vector<LineArray> const& templates,
                               LineArray const& originalScene)
     {
-        if (originalScene.size() == 0 or templates.empty())
+        if (templates.empty() or originalScene.cols() == 0 or featuremap.getFeatureSize() == core::Size{0,0})
             return {};
 
         std::vector<Match> all_matches{};
 
-        // Apply scene ratio
-        const auto sceneRatio = matcher.getSceneRatio();
-        const auto scene = sceneRatio*originalScene;
+        // Matching
+        std::vector<core::LineArray> aligned_templates{}; aligned_templates.reserve(templates.size()*2);
+        std::vector<int> template_indices{}; template_indices.reserve(aligned_templates.size());
+        std::vector<core::Point2> alignments{}; alignments.reserve(aligned_templates.size());
+        std::vector<Mat23> transforms{}; transforms.reserve(aligned_templates.size());
 
-        // Shift the scene so that all scene lines are greater than 0.
-        // DT3 requires that all line points have positive values
-        SceneShift const& scene_shift = getSceneCenteredTranslation(scene, matcher.getScenePadding());
-        LineArray const& shifted_scene = translate(scene, scene_shift.translation);
-
-        // Build DT3 feature map
-        const auto distanceScale = 1.f/sceneRatio; // Removes the effect of scaling down the scene
-        auto const& featuremap = buildFeaturemap(
-                matcher.getDepth(), scene_shift.sceneSize, matcher.getCoeff(), shifted_scene, distanceScale);
-
-    #pragma omp parallel default(shared)
+        for (int tmpl_idx{0}; tmpl_idx<templates.size(); ++tmpl_idx)
         {
-            std::vector<Match> private_matches{};
-#pragma omp for schedule(dynamic, 10)
-            for (size_t i=0; i < templates.size(); ++i) {
-                const LineArray &originalTmpl = templates.at(i);
-                if (originalTmpl.size() == 0) continue;
-                const auto& tmpl = sceneRatio*originalTmpl;
-                for (SearchCombination const &combination : establishSearchStrategy(searcher, tmpl, originalScene)) {
-                    const auto &scene_line = getLine(shifted_scene, combination.getSceneLineIdx());
-                    const auto &tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
-                    const auto &align_vec = normalize(scene_line);
-                    // Two possible transforms for the line alignment
-                    for (auto const &initial_transf : aling(tmpl_line, scene_line)) {
-                        const LineArray &aligned_tmpl = transform(tmpl, initial_transf);
-                        std::optional<OptimalTranslation> const &result = optimize(
-                                optimizer, aligned_tmpl, align_vec, featuremap);
-                        if (result.has_value()) {
-                            OptimalTranslation const &opt_transl = result.value();
-                            // Combine initial_transf with opt_transl and subtract the initial scene shift
-                            Mat23 combined = combine(-scene_shift.translation,
-                                                     combine(opt_transl.translation, initial_transf));
-                            combined.block<2,1>(0,2) /= sceneRatio;
-                            private_matches.emplace_back(
-                                    i, opt_transl.score,
-                                    combined
-                            );
-                        }
-                    }
-                }
-            }
-    #pragma omp critical
+            auto const& tmpl = templates[tmpl_idx];
+            if (tmpl.size() == 0) continue;
+            for (SearchCombination const& combination : establishSearchStrategy(searcher, tmpl, originalScene))
             {
-                std::move(private_matches.begin(),private_matches.end(),std::back_inserter(all_matches));
+                const auto& scene_line = getLine(originalScene, combination.getSceneLineIdx());
+                const auto& tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
+                const auto& align_vec = normalize(scene_line);
+
+                auto const& [transf, transf_rev] = align(tmpl_line, scene_line);
+                transforms.emplace_back(transf);
+                transforms.emplace_back(transf_rev);
+                template_indices.emplace_back(tmpl_idx);
+                template_indices.emplace_back(tmpl_idx);
+                aligned_templates.emplace_back(transform(tmpl, transf));
+                aligned_templates.emplace_back(transform(tmpl, transf_rev));
+                alignments.emplace_back(align_vec);
+                alignments.emplace_back(align_vec);
             }
         }
-        std::sort(all_matches.begin(), all_matches.end());
+
+        std::vector<std::optional<OptimalTranslation>> const& results = optimize(
+                optimizer, aligned_templates, alignments, featuremap);
+
+        for(size_t res_idx{0}; res_idx<aligned_templates.size(); ++res_idx)
+        {
+            auto const& res = results.at(res_idx);
+            if (res.has_value())
+            {
+                OptimalTranslation const& opt_transl = res.value();
+                Mat23 combined = combine(opt_transl.translation, transforms.at(res_idx));
+                all_matches.push_back(
+                        Match{template_indices[res_idx], opt_transl.score, combined}
+                );
+            }
+        }
+
+
+        std::sort(all_matches.begin(), all_matches.end(),
+                  [](const Match& lhs, const Match& rhs){return lhs.score < rhs.score;});
+
         return all_matches;
     }
 }

@@ -61,8 +61,9 @@ namespace openfdcm::matching
      * @return A vector containing all the sorted matches by score (lowest to highest)
      */
     template<IsMatchStrategyInstance T>
-    std::vector<Match>  search(const T & matcher, const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
-                               std::vector<core::LineArray> const& templates, core::LineArray const& original_scene);
+    std::vector<Match> search(const T & matcher, const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
+                              const FeatureMap& featuremap, std::vector<core::LineArray> const& templates,
+                              const core::LineArray& scene);
 
 
     namespace detail {
@@ -72,8 +73,9 @@ namespace openfdcm::matching
             [[nodiscard]] virtual std::unique_ptr<MatcherConcept> clone() const = 0;
             [[nodiscard]] virtual std::vector<Match> search(const SearchStrategy &searcher,
                                                             const OptimizeStrategy &optimizer,
+                                                            const FeatureMap& featuremap,
                                                             std::vector<core::LineArray> const& templates,
-                                                            core::LineArray const& scene) const = 0;
+                                                            const core::LineArray& scene) const = 0;
         };
 
         template<IsMatchStrategyInstance T>
@@ -87,10 +89,12 @@ namespace openfdcm::matching
                 return std::make_unique<MatcherModel<T>>(*this);
             }
 
-            [[nodiscard]] std::vector<Match> search(const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
-                    std::vector<core::LineArray> const& templates, core::LineArray const& scene) const final
+            [[nodiscard]] std::vector<Match>
+                    search(const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
+                           const FeatureMap& featuremap, const std::vector<core::LineArray>& templates,
+                           const core::LineArray& scene) const final
             {
-                return openfdcm::matching::search(object, searcher, optimizer, templates, scene);
+                return openfdcm::matching::search(object, searcher, optimizer, featuremap, templates, scene);
             }
 
             T object;
@@ -113,9 +117,10 @@ namespace openfdcm::matching
         MatchStrategy& operator=(MatchStrategy&& other) noexcept = default;
 
         [[nodiscard]] std::vector<Match> search(const SearchStrategy &searcher, const OptimizeStrategy &optimizer,
-                std::vector<core::LineArray> const& templates, core::LineArray const& scene) const
+                                                const FeatureMap& featuremap, std::vector<core::LineArray> const& templates,
+                                                const core::LineArray& scene) const
         {
-            return this->pimpl->search(searcher, optimizer, templates, scene);
+            return this->pimpl->search(searcher, optimizer, featuremap, templates, scene);
         }
     };
 
@@ -135,21 +140,11 @@ namespace openfdcm::matching
     inline std::vector<Match> search(const MatchStrategy &matcher,
                                      const SearchStrategy &searcher,
                                      const OptimizeStrategy &optimizer,
+                                     const FeatureMap& featuremap,
                                      std::vector<core::LineArray> const& templates,
-                                     core::LineArray const& scene)
+                                     const core::LineArray& scene)
     {
-        return matcher.search(searcher, optimizer, templates, scene);
-    }
-
-    /**
-     * @brief Smaller than Operator to enable sorting by score (smallest to largest)
-     * @param rhs Right hand side Match
-     * @param lhs Left hand side Match
-     * @return True if score of rhs is smaller
-     */
-    inline bool operator<(Match const& rhs, Match const& lhs) noexcept
-    {
-        return rhs.score < lhs.score;
+        return matcher.search(searcher, optimizer, featuremap, templates, scene);
     }
 } // namespace openfdcm::matching
 
