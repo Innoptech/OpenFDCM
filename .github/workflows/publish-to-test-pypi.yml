@@ -39,7 +39,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install .
-          python3 -m 
+          python3 -c 'import openfdcm'
 
       - name: Run tests
         run: |
