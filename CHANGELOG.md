@@ -1,3 +1,9 @@
+## v0.5.13 (2024-08-15)
+
+### Fix
+
+- deactivate windows wheels
+
 ## v0.5.12 (2024-08-15)
 
 ### Fix
