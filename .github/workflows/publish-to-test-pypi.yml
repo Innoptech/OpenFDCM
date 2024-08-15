@@ -44,7 +44,7 @@ jobs:
       - name: Run tests
         run: |
           python3 -m pip install numpy pytest
-          python3 -m pytest
+          OPENBLAS_NUM_THREADS=1 python3 -m pytest
 
   bump_version_and_tag:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
@@ -84,7 +84,7 @@ jobs:
         run: |
           python -c "import platform; print(f'System: {platform.system()}'); print(f'Architecture: {platform.architecture()[0]}')"
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.18.1
+        run: python -m pip install cibuildwheel==2.20.0
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
       - uses: actions/upload-artifact@v4
