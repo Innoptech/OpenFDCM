@@ -35,26 +35,34 @@ SOFTWARE.
 #include "openfdcm/core/version.h"
 #include "openfdcm/core/math.h"
 
+#ifdef __GNUC__
+#define OPENFDCM_PACKED(...) __VA_ARGS__ __attribute__((__packed__))
+#elif _MSC_VER
+#define OPENFDCM_PACKED( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop))
+#else
+    #error "Unsupported compiler"
+#endif
+
 namespace openfdcm::core
 {
-// Inspired by LAS Specification 1.4 - R15
-    struct __attribute__((__packed__)) LinesSerialHeader {
-        char fileSignature[5]{};
-        uint16_t fileSourceID = 0;
-        uint32_t guidData1 = 0;
-        uint16_t guidData2 = 0;
-        uint16_t guidData3 = 0;
-        unsigned char guidData4[8] = {0};
-        uint16_t versionMajor{}, versionMinor{}, versionPatch{};
-        uint16_t creationDay{}, creationYear{};
-        uint16_t headerSize{};
-        uint32_t offsetToLineData{};
-        unsigned char lineDataFormat{};
-        uint16_t lineDataRecordLen{};
-        uint64_t lineRecordNum{};
 
-        [[nodiscard]] uint32_t GetLineRecordsCount() const { return lineRecordNum; }
-    };
+OPENFDCM_PACKED(struct LinesSerialHeader {
+    char fileSignature[5]{};
+    uint16_t fileSourceID = 0;
+    uint32_t guidData1 = 0;
+    uint16_t guidData2 = 0;
+    uint16_t guidData3 = 0;
+    unsigned char guidData4[8] = {0};
+    uint16_t versionMajor{}, versionMinor{}, versionPatch{};
+    uint16_t creationDay{}, creationYear{};
+    uint16_t headerSize{};
+    uint32_t offsetToLineData{};
+    unsigned char lineDataFormat{};
+    uint16_t lineDataRecordLen{};
+    uint64_t lineRecordNum{};
+
+    [[nodiscard]] uint32_t GetLineRecordsCount() const { return lineRecordNum; }
+});
 
     template <class InputCharIterator>
     inline void readBytes(InputCharIterator &it, InputCharIterator &end, char* _ptr, size_t _size){
