@@ -25,7 +25,7 @@ SOFTWARE.
 import cv2
 import numpy as np
 import base64
-from openfdcm import DefaultMatch, DefaultSearch, DefaultOptimize, search
+import openfdcm
 
 def decode_image(base64_str):
     base64_data = base64.b64decode(base64_str.split(",")[1])
@@ -97,24 +97,30 @@ templates = [convert_lines_to_array(tmpl_lines)*scale]
 scene = convert_lines_to_array(scene_lines)
 
 # Perform template matching
-max_tmpl_lines, max_scene_lines = 4, 4
-depth = 30
-scene_ratio = 1.0
-scene_padding = 2.2
-coeff = 5.0
-search_strategy = DefaultSearch(max_tmpl_lines, max_scene_lines)
-optimizer_strategy = DefaultOptimize()
-matcher = DefaultMatch(depth, coeff, scene_ratio, scene_padding)
+max_tmpl_lines, max_scene_lines = 4, 4  # Combinatory search parameters.
+depth = 30              # The [0, pi] discretization.
+scene_ratio = 1.0       # The image size ratio used for FDCM algorithm. Relative to the scene lines length.
+scene_padding = 1.5     # Pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
+coeff = 5.0             # A weighting factor to enhance the angular cost vs distance cost in FDCM algorithm.
+num_threads = 4
 
-matches = search(matcher, search_strategy, optimizer_strategy, templates, scene)
+threadpool = openfdcm.ThreadPool(num_threads)
+search_strategy = openfdcm.DefaultSearch(max_tmpl_lines, max_scene_lines)
+optimizer_strategy = openfdcm.DefaultOptimize(threadpool)
+matcher = openfdcm.DefaultMatch()
+
+featuremap_params = openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff, padding=scene_padding)
+featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
+matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, templates, scene)
 
 if matches:
     best_match = matches[0]
-    best_match_id = best_match.tmpl_idx
+    best_match_tmpl_id = best_match.tmpl_idx
+    best_match_template = templates[best_match_tmpl_id]
     result_rotation = best_match.transform[0:2, 0:2]
     result_translation = best_match.transform[0:2, 2]
 
     print("Result Rotation:\n", result_rotation)
     print("Result Translation:\n", result_translation)
 
-    display_best_match(tmpl_image, templates[best_match_id], matches[best_match_id].transform)
+    display_best_match(tmpl_image, best_match_template, best_match.transform)
