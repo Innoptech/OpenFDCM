@@ -37,6 +37,10 @@ namespace openfdcm::matching
         int tmplIdx;
         float score;
         core::Mat23 transform;
+
+        Match(int _tmplIdx, float _score, core::Mat23 _transform)
+        : tmplIdx{_tmplIdx}, score{_score}, transform{std::move(_transform)}
+        {}
     };
 
     // ************************************************************************************************************
