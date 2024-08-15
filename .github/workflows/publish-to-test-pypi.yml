@@ -44,7 +44,7 @@ jobs:
       - name: Run tests
         run: |
           python3 -m pip install numpy pytest
-          OPENBLAS_NUM_THREADS=1 python3 -m pytest
+          python3 -m pytest
 
   bump_version_and_tag:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
