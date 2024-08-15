@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    if: "github.event_name == 'pull_request'"
+    #if: "github.event_name == 'pull_request'"
     name: Build and Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
