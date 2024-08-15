@@ -1,3 +1,9 @@
+## v0.5.6 (2024-08-15)
+
+### Fix
+
+- Replace std::optional::value() with dereference for macOS pre-10.13 support
+
 ## v0.5.5 (2024-08-15)
 
 ### Fix
