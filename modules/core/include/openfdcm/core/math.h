@@ -201,8 +201,8 @@ namespace openfdcm::core
      */
     template<typename DerivedA, typename DerivedB>
     inline bool allClose(DenseBase<DerivedA> const& a, DenseBase<DerivedB> const& b,
-                         typename DerivedA::RealScalar const& rtol = 0.0,
-                         typename DerivedA::RealScalar const& atol = 1e-5) noexcept
+                         typename DerivedA::RealScalar const& rtol = static_cast<DerivedA::RealScalar>(0.0),
+                         typename DerivedA::RealScalar const& atol = static_cast<DerivedA::RealScalar>(1e-5)) noexcept
     {
         return ((a.derived().array() - b.derived().array()).array().abs() <= (atol + rtol * b.derived().array().abs())).all();
     }
