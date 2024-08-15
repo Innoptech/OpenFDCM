@@ -226,7 +226,7 @@ void matching(py::module_ &m) {
     py::implicitly_convertible<DefaultMatch, MatchStrategy>();
 
     py::class_<Match>(m, "Match")
-            .def(py::init<>())
+            .def(py::init<int, float, core::Mat23>())
             .def_readwrite("tmpl_idx", &Match::tmplIdx)
             .def_readwrite("score", &Match::score)
             .def_readwrite("transform", &Match::transform)

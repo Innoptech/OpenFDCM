@@ -24,7 +24,7 @@ SOFTWARE.
 
 #ifndef OPENFDCM_DEFAULTMATCH_H
 #define OPENFDCM_DEFAULTMATCH_H
-#include "openfdcm/matching/matchStrategy.h"
+#include "openfdcm/matching/matchstrategy.h"
 
 namespace openfdcm::matching
 {
