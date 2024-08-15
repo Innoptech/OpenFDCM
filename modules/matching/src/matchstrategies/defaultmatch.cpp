@@ -44,11 +44,13 @@ namespace openfdcm::matching
 
         // Matching
         std::vector<core::LineArray> aligned_templates{}; aligned_templates.reserve(templates.size()*2);
+        std::vector<int> template_indices{}; template_indices.reserve(aligned_templates.size());
         std::vector<core::Point2> alignments{}; alignments.reserve(aligned_templates.size());
         std::vector<Mat23> transforms{}; transforms.reserve(aligned_templates.size());
 
-        for (const auto & tmpl : templates)
+        for (int tmpl_idx{0}; tmpl_idx<templates.size(); ++tmpl_idx)
         {
+            auto const& tmpl = templates[tmpl_idx];
             if (tmpl.size() == 0) continue;
             for (SearchCombination const& combination : establishSearchStrategy(searcher, tmpl, originalScene))
             {
@@ -59,6 +61,8 @@ namespace openfdcm::matching
                 auto const& [transf, transf_rev] = align(tmpl_line, scene_line);
                 transforms.emplace_back(transf);
                 transforms.emplace_back(transf_rev);
+                template_indices.emplace_back(tmpl_idx);
+                template_indices.emplace_back(tmpl_idx);
                 aligned_templates.emplace_back(transform(tmpl, transf));
                 aligned_templates.emplace_back(transform(tmpl, transf_rev));
                 alignments.emplace_back(align_vec);
@@ -77,7 +81,7 @@ namespace openfdcm::matching
                 OptimalTranslation const& opt_transl = res.value();
                 Mat23 combined = combine(opt_transl.translation, transforms.at(res_idx));
                 all_matches.push_back(
-                        Match{int(res_idx/2), opt_transl.score, combined}
+                        Match{template_indices[res_idx], opt_transl.score, combined}
                 );
             }
         }
