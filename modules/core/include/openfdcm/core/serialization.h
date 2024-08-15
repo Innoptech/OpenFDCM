@@ -38,7 +38,7 @@ SOFTWARE.
 #ifdef __GNUC__
 #define OPENFDCM_PACKED(...) __VA_ARGS__ __attribute__((__packed__))
 #elif _MSC_VER
-#define OPENFDCM_PACKED( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop))
+#define OPENFDCM_PACKED(...) __pragma( pack(push, 1) ) __VA_ARGS__ __pragma( pack(pop))
 #else
     #error "Unsupported compiler"
 #endif
