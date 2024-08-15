@@ -44,16 +44,44 @@ namespace tests
     }
 
     /**
-     * @brief Create a uniformly distributed set of lines in [-PI/2, Pi/2]
-     * @param line_number The desired number of lines
-     * @param length The length of the lines
-     * @return The resulting array of lines
+     * Generates a logarithmic spaced array of values between start and end.
+     *
+     * @param start The starting value for the logspace.
+     * @param end The ending value for the logspace.
+     * @param num The number of values to generate.
+     * @return std::vector<float> A vector containing logarithmically spaced values.
+     */
+    inline std::vector<float> logspace(float start, float end, size_t num) {
+        std::vector<float> result(num);
+        float log_start = std::log10(start);
+        float log_end = std::log10(end);
+        float step = (log_end - log_start) / (num - 1);
+        for (size_t i = 0; i < num; ++i) {
+            result[i] = std::pow(10, log_start + i * step);
+        }
+        return result;
+    }
+
+    /**
+     * Generates an array of lines with their endpoints calculated using a logarithmic space of angles to avoid symmetries.
+     *
+     * @param line_number The number of lines to generate.
+     * @param length The length of each line.
+     * @return openfdcm::core::LineArray A 4 x line_number matrix where each column represents a line.
+     *         The first two rows represent the starting point (always [0, 0]),
+     *         and the last two rows represent the endpoint of each line.
      */
     inline openfdcm::core::LineArray createLines(size_t const line_number, const size_t length) {
-        openfdcm::core:: LineArray linearray(4, line_number);
-        for(size_t i{0};i<line_number;i++){
-            float lineAngle = float(i)/float(line_number)*M_PI-M_PI_2;
-            linearray.block<4,1>(0,i) << openfdcm::core::rotate(openfdcm::core::Line{0,0, (float)length, 0}, makeRotation(lineAngle));
+        openfdcm::core::LineArray linearray(4, line_number);
+
+        // Generate logspace angles
+        std::vector<float> line_angles = logspace(2 * M_PI, 4 * M_PI, line_number);
+
+        for (size_t i = 0; i < line_number; ++i) {
+            float lineAngle = line_angles[i];
+            Eigen::Matrix2f rotation_matrix = makeRotation(lineAngle);
+            Eigen::Vector2f endpoint = rotation_matrix * Eigen::Vector2f(float(length), 0);
+            linearray.block<4,1>(0, i) << 0.0f, 0.0f, endpoint[0], endpoint[1];
         }
         return linearray;
     }

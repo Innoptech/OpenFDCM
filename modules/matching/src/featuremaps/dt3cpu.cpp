@@ -6,12 +6,55 @@
 namespace openfdcm::matching
 {
     namespace detail {
-        /**
-         * @brief Propagate the distance transform in the orientation (feature) space
-         * @param featuremap The feature map (32bits)
-         * @param coeff The propagation coefficient
-         */
-        void propagateOrientation(detail::Dt3Map<float> &featuremap, float coeff) noexcept {
+        std::array<float, 2>
+        minmaxTranslation(const core::LineArray& tmpl, core::Point2 const& align_vec, core::Size const& featuresize,
+                          core::Point2 const& extraTranslation)
+        {
+            if (core::allClose(align_vec, core::Point2{0,0}))
+                return {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()};
+            Eigen::Array<float,2,1> size = featuresize.cast<float>();
+            auto [min_point, max_point] = core::minmaxPoint(tmpl);
+            min_point += extraTranslation;
+            max_point += extraTranslation;
+            core::Point2 diff = (size - 1 - max_point.array());
+
+            if (((size - 1 - max_point.array() ) < 0).any())
+                return {NAN, NAN};
+            if ((min_point.array() < 0).any())
+                return {NAN, NAN};
+
+            // Evaluate intersection of the four image boundaries for two lines
+            // The reason is that align_vec can be negative or positive
+            Eigen::Array<float,2,4> multipliers{};
+            multipliers.block<2,1>(0,0) = - max_point;
+            multipliers.block<2,1>(0,1) = - min_point;
+            multipliers.block<2,1>(0,2) = (size - max_point.array() - 1.f);
+            multipliers.block<2,1>(0,3) = (size - min_point.array() - 1.f);
+            multipliers.colwise() /= align_vec.array();
+            Eigen::Array<bool,2,4> const multiplier_sign = Eigen::Array<bool, 2,4>::NullaryExpr(
+                    [&multipliers](Eigen::Index row, Eigen::Index col) {return std::signbit(multipliers(row, col));});
+
+            Eigen::Array<float,2,4> const pos_coeffs = (multiplier_sign)
+                    .select(std::numeric_limits<float>::infinity(), multipliers);
+            Eigen::Array<float,2,4> const neg_coeffs = (multiplier_sign)
+                    .select(multipliers, -std::numeric_limits<float>::infinity());
+
+            // extremum_coeffs:
+            // | negative_x, negative_y |
+            // | positive_x, positive_y |
+            Eigen::Array<float,2,2> extremum_coeffs{
+                    {neg_coeffs.row(0).maxCoeff<Eigen::PropagateNaN>(), neg_coeffs.row(1).maxCoeff<Eigen::PropagateNaN>()},
+                    {pos_coeffs.row(0).minCoeff<Eigen::PropagateNaN>(), pos_coeffs.row(1).minCoeff<Eigen::PropagateNaN>()}
+            };
+
+            if (extremum_coeffs.allFinite())
+                return {extremum_coeffs.row(0).maxCoeff(), extremum_coeffs.row(1).minCoeff()};
+            if (extremum_coeffs.col(0).allFinite())
+                return {extremum_coeffs(0,0), extremum_coeffs(1,0)};
+            return {extremum_coeffs(0,1), extremum_coeffs(1,1)};
+        }
+
+        void propagateOrientation(detail::Dt3CpuMap<float> &featuremap, float coeff) noexcept {
             // Collect angles
             std::vector<float> angles;
             angles.reserve(featuremap.size());
@@ -45,60 +88,10 @@ namespace openfdcm::matching
 
         inline Eigen::VectorXi vectorToEigenVector(const std::vector<long> &vec) noexcept {
             Eigen::VectorXi eigenVec(vec.size());
-            for (size_t i = 0; i < vec.size(); ++i) {
+            for (Eigen::Index i = 0; i < vec.size(); ++i) {
                 eigenVec[i] = vec[i];
             }
             return eigenVec;
-        }
-
-        Dt3Map<float> buildFeaturemap(size_t depth, core::Size const &size,
-                                      float coeff, core::LineArray const &linearray,
-                                      float sceneScale,
-                                      const std::weak_ptr<BS::thread_pool> &pool) noexcept(false) {
-            // Step 1: Define a number of linearly spaced angles
-            std::set<float> angles{};
-            for (size_t i{0}; i < depth; i++)
-                angles.insert(float(i) * M_PIf / float(depth) - M_PI_2f);
-
-            // Step 2: Classify lines
-            auto classified_lines = detail::classifyLines(angles, linearray);
-
-            // Step 3: Build featuremap with distance transform
-            detail::Dt3Map<float> dt3map{};
-
-            auto func = [&](float angle) {
-                Eigen::VectorXi indices = vectorToEigenVector(classified_lines[angle]);
-                core::RawImage<float> distance_transformed =
-                        core::distanceTransform<float>(linearray(Eigen::all, indices), size) * sceneScale;
-                dt3map[angle] = std::move(distance_transformed);
-            };
-
-            auto pool_ptr = pool.lock();
-            if (pool_ptr) {
-                // Submit tasks to the thread pool for each angle
-                std::vector<std::future<void>> futures;
-                for (const auto &angle : angles) {
-                    futures.push_back(pool_ptr->submit_task([=] { func(angle); }));
-                }
-                // Wait for all tasks to complete
-                for (auto &fut : futures) {
-                    fut.get();
-                }
-            } else {
-                // If no thread pool is available, run tasks sequentially
-                for (const auto &angle : angles) {
-                    func(angle);
-                }
-            }
-
-            // Step 4: Propagate orientation
-            propagateOrientation(dt3map, coeff);
-
-            // Step 5: Line integral
-            for (auto &[lineAngle, feature] : dt3map)
-                core::lineIntegral(feature, lineAngle);
-
-            return dt3map;
         }
 
         SceneShift getSceneCenteredTranslation(core::LineArray const &scene, float scene_padding) noexcept {
@@ -111,56 +104,121 @@ namespace openfdcm::matching
         }
     } // namespace detail
 
-
-    Dt3Cpu::Dt3Cpu(core::LineArray scene, Dt3CpuParameters params, const BS::concurrency_t num_threads)
-    : params_{params}, scene_{std::move(scene)}, pool_{std::make_shared<BS::thread_pool>(num_threads)}
-    {
-        assert(scene_.size() > 0);
-        // Apply scene ratio
-        const auto sceneScale= params_.scale;
-        transformedScene_ = sceneScale * scene_;
+    Dt3Cpu buildCpuFeaturemap(const core::LineArray &scene, const Dt3CpuParameters &params,
+                              const std::shared_ptr<BS::thread_pool> &pool_ptr) noexcept(false) {
+        if (scene.cols() == 0)
+            return {detail::Dt3CpuMap<float>{}, core::Point2{0,0}, core::Size{0,0}};
 
         // Shift the scene so that all scene lines are greater than 0.
         // DT3 requires that all line points have positive values
-        detail::SceneShift const& sceneShift = detail::getSceneCenteredTranslation(transformedScene_, params_.padding);
-        sceneTranslation_ = sceneShift.translation;
-        sceneSize_ = sceneShift.sceneSize;
-        transformedScene_ = core::translate(transformedScene_, sceneTranslation_);
+        detail::SceneShift const& sceneShift = detail::getSceneCenteredTranslation(scene, params.padding);
+        const core::LineArray translatedScene = core::translate(scene, sceneShift.translation);
 
-        const auto distanceScale = 1.f / params_.scale; // Removes the effect of scaling down the scene
-        dt3map_ = detail::buildFeaturemap(params_.depth, sceneShift.sceneSize,
-                                          params_.dt3Coeff, transformedScene_, distanceScale, this->getThreadPool());
+        // Step 1: Define a number of linearly spaced angles
+        std::set<float> angles{};
+        for (size_t i{0}; i < params.depth; i++)
+            angles.insert(float(i) * M_PIf / float(params.depth) - M_PI_2f);
+
+        // Step 2: Classify lines
+        auto const& classified_lines = detail::classifyLines(angles, translatedScene);
+
+        // Step 3: Build featuremap with distance transform
+        detail::Dt3CpuMap<float> dt3map{};
+
+        auto func = [&](float angle) {
+            Eigen::VectorXi indices = detail::vectorToEigenVector(classified_lines.at(angle));
+            core::RawImage<float> distance_transformed =
+                    core::distanceTransform<float>(translatedScene(Eigen::all, indices), sceneShift.sceneSize);
+            dt3map[angle] = std::move(distance_transformed);
+        };
+
+        if (pool_ptr) {
+            // Submit tasks to the thread pool for each angle
+            std::vector<std::future<void>> futures;
+            for (const auto &angle : angles) {
+                futures.push_back(pool_ptr->submit_task([=] { func(angle); }));
+            }
+            // Wait for all tasks to complete
+            for (auto &fut : futures) {
+                fut.get();
+            }
+        } else {
+            // If no thread pool is available, run tasks sequentially
+            for (const auto &angle : angles) {
+                func(angle);
+            }
+        }
+
+        // Step 4: Propagate orientation
+        detail::propagateOrientation(dt3map, params.dt3Coeff);
+
+        // Step 5: Line integral
+        for (auto &[lineAngle, feature] : dt3map)
+            core::lineIntegral(feature, lineAngle);
+
+        return {dt3map, sceneShift.translation, sceneShift.sceneSize};
     }
 
     template<>
-    std::vector<float> evaluate(const Dt3Cpu& featuremap, const std::vector<core::LineArray>& templates,
-                                       const std::vector<core::Point2>& translations)
+    std::array<float, 2>
+    minmaxTranslation(const Dt3Cpu& featuremap, const core::LineArray& tmpl, core::Point2 const& align_vec)
     {
-        assert(templates.size() == translations.size());
-        auto const& dt3map = featuremap.getDt3Map();
-        auto const sceneScale = featuremap.getParams().scale;
+        return detail::minmaxTranslation(tmpl, align_vec, featuremap.getFeatureSize(), featuremap.getSceneTranslation());
+    }
 
-        std::vector<float> scores{}; scores.reserve(templates.size());
-        for (size_t tmpl_idx{0}; tmpl_idx<templates.size(); ++tmpl_idx)
+    template<>
+    std::vector<std::vector<float>> evaluate(const Dt3Cpu& featuremap, const std::vector<core::LineArray>& templates,
+                                             const std::vector<std::vector<core::Point2>>& translations)
+    {
+        const auto& dt3map = featuremap.getDt3Map();
+        std::vector<std::vector<float>> scores(templates.size());
+
+        // Preallocate Eigen structures
+        Eigen::Matrix<int, 2, 1> point1, point2;
+        for (size_t tmpl_idx = 0; tmpl_idx < templates.size(); ++tmpl_idx)
         {
-            // Translate the template on the transformed scene
-            core::LineArray const& scaledTmpl = templates.at(tmpl_idx)*sceneScale;
-            core::Point2 const& scaledTranslation = translations.at(tmpl_idx)*sceneScale;
-            core::LineArray const& tmpl = core::translate(scaledTmpl,
-                                                          featuremap.getSceneTranslation()+scaledTranslation);
-            Eigen::VectorXf score_per_line(tmpl.cols());
-            for(long i{0};i<tmpl.cols();++i)
+            const auto& tmpl = templates[tmpl_idx];
+            const auto& tmpl_translations = translations[tmpl_idx];
+            scores[tmpl_idx].reserve(tmpl_translations.size());
+
+            // Identify the line closest orientations, preallocate vector
+            std::vector<detail::Dt3CpuMap<float>::const_iterator> line_orientation_it(tmpl.cols());
+
+            for (long i = 0; i < tmpl.cols(); ++i)
             {
-                core::Line const& line = core::getLine(tmpl, i);
-                auto const& it = detail::closestOrientation(dt3map, line);
-                Eigen::Matrix<int,2,1> point1{core::p1(line).cast<int>()}, point2{core::p2(line).cast<int>()};
-                core::RawImage<float> const feature = it->second;
-                float const lookup_p1 = feature(point1.y(), point1.x());
-                float const lookup_p2 = feature(point2.y(), point2.x());
-                score_per_line(i) = lookup_p1-lookup_p2;
+                const core::Line& line = core::getLine(tmpl, i);
+                line_orientation_it[i] = detail::closestOrientation(dt3map, line);
             }
-            scores.emplace_back(score_per_line.array().abs().sum());
+
+            // Translate the template on the transformed scene
+            for (const auto& translation : tmpl_translations)
+            {
+                const core::LineArray& translatedTmpl = core::translate(tmpl, featuremap.getSceneTranslation() + translation);
+
+                // Preallocate score array
+                Eigen::VectorXf score_per_line(translatedTmpl.cols());
+
+                for (long i = 0; i < translatedTmpl.cols(); ++i)
+                {
+                    const core::Line& line = core::getLine(translatedTmpl, i);
+                    const auto& it = line_orientation_it[i];
+
+                    // Avoid casting inside the loop
+                    point1 = core::p1(line).template cast<int>();
+                    point2 = core::p2(line).template cast<int>();
+
+                    // Access feature data directly
+                    const auto& feature = it->second;
+                    float lookup_p1 = feature(point1.y(), point1.x());
+                    float lookup_p2 = feature(point2.y(), point2.x());
+
+                    // Calculate score per line
+                    score_per_line(i) = std::abs(lookup_p1 - lookup_p2);
+                }
+                scores[tmpl_idx].emplace_back(score_per_line.sum());
+            }
         }
         return scores;
     }
+
 }

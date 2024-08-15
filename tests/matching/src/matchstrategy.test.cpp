@@ -33,14 +33,16 @@ using namespace openfdcm::core;
 using namespace openfdcm::matching;
 
 
-void run_test(float scene_ratio) {
-    size_t const max_tmpl_lines{4}, max_scene_lines{10};
+void run_test(float scene_ratio, BS::concurrency_t num_threads) {
+    size_t const max_tmpl_lines{3}, max_scene_lines{3};
     size_t const depth{30};
     float const scene_padding{2.2f};
     float const coeff{5.f};
 
+    auto threadpool = std::make_shared<BS::thread_pool>(num_threads);
+
     DefaultSearch searchStrategy{max_tmpl_lines, max_scene_lines};
-    DefaultOptimize optimizerStrategy{};
+    DefaultOptimize optimizerStrategy{threadpool};
     DefaultMatch matcher{};
     size_t const numberOfLines{10};
     size_t const lineLength{100};
@@ -50,8 +52,8 @@ void run_test(float scene_ratio) {
     {
         Mat23 scene_transform{{-1, 0, lineLength}, {0, -1, lineLength}};
         LineArray scene = transform(tmpl, scene_transform);
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{depth, coeff, scene_ratio, scene_padding}};
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl});
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
@@ -64,8 +66,8 @@ void run_test(float scene_ratio) {
     {
         Mat23 scene_transform{{1, 0, 0}, {0, 1, 0}};
         LineArray scene = transform(tmpl, scene_transform);
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{depth, coeff, scene_ratio, scene_padding}};
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl});
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
@@ -77,8 +79,8 @@ void run_test(float scene_ratio) {
     // Test for empty scene
     {
         LineArray scene(4, 0);
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{depth, coeff, scene_ratio, scene_padding}};
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl});
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         REQUIRE(matches.empty());
     }
 
@@ -86,8 +88,8 @@ void run_test(float scene_ratio) {
     {
         std::vector<LineArray> templates;
         LineArray scene = tmpl;
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{depth, coeff, scene_ratio, scene_padding}};
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
         REQUIRE(matches.empty());
     }
 
@@ -95,16 +97,18 @@ void run_test(float scene_ratio) {
     {
         std::vector<LineArray> templates{LineArray(4, 0)};
         LineArray scene = tmpl;
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{depth, coeff, scene_ratio, scene_padding}};
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
+        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
         REQUIRE(matches.empty());
     }
 }
 
 TEST_CASE("DefaultMatch") {
-    run_test(1.0f);
+    run_test(1.0f, 1);
+    run_test(1.0f, 2);
 }
 
 TEST_CASE("Scale down scene") {
-    run_test(0.3f);
+    run_test(0.3f, 1);
+    run_test(0.3f, 2);
 }

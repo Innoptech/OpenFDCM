@@ -3,97 +3,93 @@
 
 namespace openfdcm::matching
 {
-    /**
-     * @brief Compute the negative and positive values for the maximum translation of the template in the image window
-     * @param tmpl The given template
-     * @param align_vec The translation vector
-     * @param featuresize The image window size
-     * @return The negative and positive values for the maximum translation of the template in the image window
-     */
-    std::tuple<float, float> minmaxTranslation(
-            const core::LineArray& tmpl, core::Point2 const& align_vec, core::Size const& featuresize) noexcept
+    template<>
+    std::vector<std::optional<OptimalTranslation>>
+    optimize(DefaultOptimize const& optimizer, const std::vector<core::LineArray>& templates,
+             std::vector<core::Point2> const& alignments, FeatureMap const& featuremap)
     {
-        if (core::allClose(align_vec, core::Point2{0,0}))
-            return {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()};
-        Eigen::Array<float,2,1> size = featuresize.cast<float>();
-        auto const& [min_point, max_point] = core::minmaxPoint(tmpl);
+        assert(templates.size() == alignments.size());
 
-        if (((size -1 - max_point.array()) < 0).any())
-            return {NAN, NAN};
-        if ((min_point.array() < 0).any())
-            return {NAN, NAN};
+        std::vector<std::optional<OptimalTranslation>> result(templates.size());
 
-        // Evaluate intersection of the four image boundaries for two lines
-        // The reason is that align_vec can be negative or positive
-        Eigen::Array<float,2,4> multipliers{};
-        multipliers.block<2,1>(0,0) = - max_point;
-        multipliers.block<2,1>(0,1) = - min_point;
-        multipliers.block<2,1>(0,2) = (size - max_point.array() - 1.f);
-        multipliers.block<2,1>(0,3) = (size - min_point.array() - 1.f);
-        multipliers.colwise() /= align_vec.array();
-        Eigen::Array<bool,2,4> const multiplier_sign = Eigen::Array<bool, 2,4>::NullaryExpr(
-                [&multipliers](Eigen::Index row, Eigen::Index col) {return std::signbit(multipliers(row, col));});
+        auto func = [&](size_t tmpl_idx) {
+            const auto& align_vec = alignments[tmpl_idx];
+            const auto& tmpl = templates[tmpl_idx];
 
-        Eigen::Array<float,2,4> const pos_coeffs = (multiplier_sign)
-                .select(std::numeric_limits<float>::infinity(), multipliers);
-        Eigen::Array<float,2,4> const neg_coeffs = (multiplier_sign)
-                .select(multipliers, -std::numeric_limits<float>::infinity());
+            // Early exit for zero alignment vectors
+            if (core::relativelyEqual(align_vec.array().abs().sum(), 0.f)) {
+                result[tmpl_idx] = std::nullopt;
+                return;
+            }
 
-        // extremum_coeffs:
-        // | negative_x, negative_y |
-        // | positive_x, positive_y |
-        Eigen::Array<float,2,2> extremum_coeffs{
-            {neg_coeffs.row(0).maxCoeff<Eigen::PropagateNaN>(), neg_coeffs.row(1).maxCoeff<Eigen::PropagateNaN>()},
-            {pos_coeffs.row(0).minCoeff<Eigen::PropagateNaN>(), pos_coeffs.row(1).minCoeff<Eigen::PropagateNaN>()}
+            // Precompute values
+            const core::Point2 scaled_align_vec = core::rasterizeVector(align_vec);
+            const auto& [min_mul, max_mul] = minmaxTranslation(featuremap, tmpl, scaled_align_vec);
+
+            // Handle invalid translation multipliers
+            if (!std::isfinite(min_mul) || !std::isfinite(max_mul)) {
+                result[tmpl_idx] = std::nullopt;
+                return;
+            }
+
+            // Precompute initial score
+            const float initial_score = evaluate(featuremap, {tmpl}, {{core::Point2{0, 0}}})[0][0];
+            std::vector<core::Point2> translations;
+            std::vector<float> scores;
+
+            // Preallocate memory for translations and scores
+            const auto expected_translations = static_cast<size_t>(std::abs(max_mul - min_mul) + 1);
+            translations.reserve(expected_translations);
+            scores.reserve(expected_translations);
+
+            translations.push_back(core::Point2{0, 0});
+            scores.push_back(initial_score);
+
+            // Positive translations loop (precompute translation_multiplier * scaled_align_vec once per loop iteration)
+            for (long translation_multiplier = 1; translation_multiplier <= static_cast<long>(max_mul); ++translation_multiplier) {
+                core::Point2 translation = translation_multiplier * scaled_align_vec;
+                float score = evaluate(featuremap, {tmpl}, {{translation}})[0][0];
+                if (score > scores.back()) break; // Break early if no improvement
+                translations.emplace_back(translation);
+                scores.emplace_back(score);
+            }
+
+            // Negative translations loop (reset before processing)
+            for (long translation_multiplier = -1; translation_multiplier >= static_cast<long>(min_mul); --translation_multiplier) {
+                core::Point2 translation = translation_multiplier * scaled_align_vec;
+                float score = evaluate(featuremap, {tmpl}, {{translation}})[0][0];
+                if (score > scores.back()) break; // Break early if no improvement
+                translations.emplace_back(translation);
+                scores.emplace_back(score);
+            }
+
+            // Find the translation with the best score
+            size_t best_score_idx = std::distance(scores.begin(), std::min_element(scores.begin(), scores.end()));
+            result[tmpl_idx] = OptimalTranslation{scores[best_score_idx], translations[best_score_idx]};
         };
 
-        if (extremum_coeffs.allFinite())
-            return {extremum_coeffs.row(0).maxCoeff(), extremum_coeffs.row(1).minCoeff()};
-        if (extremum_coeffs.col(0).allFinite())
-            return {extremum_coeffs(0,0), extremum_coeffs(1,0)};
-        return {extremum_coeffs(0,1), extremum_coeffs(1,1)};
+        // Optimize by checking if thread pool is available or process sequentially
+        const auto& pool_ptr = optimizer.getPool().lock();
+        if (pool_ptr) {
+            // Use the thread pool to process the tasks in parallel
+            std::vector<std::future<void>> futures;
+            futures.reserve(templates.size());  // Preallocate futures vector size
+            for (size_t tmpl_idx = 0; tmpl_idx < templates.size(); ++tmpl_idx) {
+                futures.push_back(pool_ptr->submit_task([=] { func(tmpl_idx); }));
+            }
+
+            // Wait for all tasks to complete
+            for (auto& fut : futures) {
+                fut.get();
+            }
+        } else {
+            // Process sequentially if no thread pool is available
+            for (size_t tmpl_idx = 0; tmpl_idx < templates.size(); ++tmpl_idx) {
+                func(tmpl_idx);
+            }
+        }
+
+        return result;
     }
 
-    template<>
-    std::optional<OptimalTranslation> optimize(DefaultOptimize const& optimizer, const core::LineArray& tmpl,
-                                                      core::Point2 const& align_vec, FeatureMap const& featuremap)
-    {
-        (void) optimizer;
-        if (core::relativelyEqual(align_vec.array().abs().sum(),0.f))
-            return std::nullopt;
-        core::Point2 const& scaled_align_vec = core::rasterizeVector(align_vec);
-        auto const& [min_mul, max_mul] = minmaxTranslation(tmpl, scaled_align_vec, featuremap.getFeatureSize());
-        if (!std::isfinite(min_mul) or !std::isfinite(max_mul))
-            return std::nullopt;
-
-        const float initial_score = evaluate(featuremap, {tmpl}, {core::Point2{0,0}}).at(0);
-        std::vector<core::Point2> translations{core::Point2{0,0}};
-        std::vector<float> scores{initial_score};
-        long translation_multiplier{1};
-        while (translation_multiplier <= (long)max_mul)
-        {
-            const core::Point2 translation = translation_multiplier*scaled_align_vec;
-            const float score = evaluate(featuremap, {tmpl}, {translation}).at(0);
-            if (score > scores.back())
-                break;
-            translations.emplace_back(translation);
-            scores.emplace_back(score);
-            ++translation_multiplier;
-        }
-        translations.emplace_back(core::Point2{0,0});
-        scores.emplace_back(initial_score);
-        translation_multiplier = -1;
-        while (translation_multiplier >= (long)min_mul)
-        {
-            const core::Point2 translation = translation_multiplier*scaled_align_vec;
-            const float score = evaluate(featuremap, {tmpl}, {translation}).at(0);
-            if (score > scores.back())
-                break;
-            translations.emplace_back(translation);
-            scores.emplace_back(score);
-            --translation_multiplier;
-        }
-        size_t const best_score_idx = std::distance(scores.begin(), std::min_element(scores.begin(), scores.end()));
-        return OptimalTranslation{scores.at(best_score_idx), translations.at(best_score_idx)};
-    }
 }

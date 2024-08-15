@@ -1,6 +1,7 @@
 #ifndef OPENFDCM_MATCHING_FEATUREMAPS_H
 #define OPENFDCM_MATCHING_FEATUREMAPS_H
 #include <memory>
+#include <optional>
 #include "openfdcm/core/math.h"
 
 namespace openfdcm::matching {
@@ -16,14 +17,6 @@ namespace openfdcm::matching {
     // ************************************************************************************************************
     // Functions for featuremap implementations
     // ************************************************************************************************************
-    /**
-     * @brief Get the scene lines
-     * @tparam T The specialized featuremap type
-     * @param featuremap The given featuremap
-     * @return The scene lines
-     */
-    template<IsFeatureMapInstance T>
-    inline core::LineArray getSceneLines(const T& featuremap) noexcept;
 
     /**
      * @brief Get the size of the features
@@ -35,16 +28,28 @@ namespace openfdcm::matching {
     inline core::Size getFeatureSize(const T& featuremap) noexcept;
 
     /**
+     * @brief Compute the negative and positive values for the maximum translation of the template in the DT3 window
+     * @tparam T The specialized featuremap type
+     * @param featuremap The given featuremap
+     * @param tmpl The given template
+     * @param align_vec The translation vector
+     * @return The negative and positive values for the maximum translation of the template if possible
+     */
+    template<IsFeatureMapInstance T>
+    std::array<float, 2>
+    minmaxTranslation(const T& featuremap, const core::LineArray& tmpl, core::Point2 const& align_vec);
+
+    /**
      * @brief Evaluate a vector of templates on the featuremap
      * @tparam T The specialized featuremap type
      * @param featuremap The given featuremap
      * @param templates The given templates
-     * @param translations The translations for which to evaluate the templates
+     * @param translations The translations for which to evaluate each template
      * @return The score of the evaluation
      */
     template<IsFeatureMapInstance T>
-    inline std::vector<float> evaluate(const T& featuremap, const std::vector<core::LineArray>& templates,
-                                       const std::vector<core::Point2>& translations);
+    std::vector<std::vector<float>> evaluate(const T& featuremap, const std::vector<core::LineArray>& templates,
+                                             const std::vector<std::vector<core::Point2>>& translations);
 
 
     namespace detail
@@ -53,10 +58,11 @@ namespace openfdcm::matching {
         {
             virtual ~FeatureMapConcept() noexcept = default;
             [[nodiscard]] virtual std::unique_ptr<FeatureMapConcept> clone() const = 0;
-            [[nodiscard]] virtual core::LineArray getSceneLines() const = 0;
             [[nodiscard]] virtual core::Size getFeatureSize() const = 0;
-            [[nodiscard]] virtual std::vector<float> evaluate(const std::vector<core::LineArray>& templates,
-                                                              const std::vector<core::Point2>& translations) const = 0;
+            [[nodiscard]] virtual std::array<float, 2>
+            minmaxTranslation(const core::LineArray& tmpl, core::Point2 const& align_vec) const = 0;
+            [[nodiscard]] virtual std::vector<std::vector<float>> evaluate(const std::vector<core::LineArray>& templates,
+                                                              const std::vector<std::vector<core::Point2>>& translations) const = 0;
         };
 
         template<IsFeatureMapInstance T>
@@ -70,16 +76,17 @@ namespace openfdcm::matching {
                 return std::make_unique<FeatureMapModel<T>>(*this);
             }
 
-            [[nodiscard]] core::LineArray getSceneLines() const final {
-                return openfdcm::matching::getSceneLines(object);
-            }
-
             [[nodiscard]] core::Size getFeatureSize() const final {
                 return openfdcm::matching::getFeatureSize(object);
             }
 
-            [[nodiscard]] std::vector<float> evaluate(const std::vector<core::LineArray>& templates,
-                                                      const std::vector<core::Point2>& translations) const final {
+            [[nodiscard]] std::array<float, 2>
+            minmaxTranslation(const core::LineArray& tmpl, core::Point2 const& align_vec) const final {
+                return openfdcm::matching::minmaxTranslation(object, tmpl, align_vec);
+            }
+
+            [[nodiscard]] std::vector<std::vector<float>> evaluate(const std::vector<core::LineArray>& templates,
+                                                      const std::vector<std::vector<core::Point2>>& translations) const final {
                 return openfdcm::matching::evaluate(object, templates, translations);
             }
 
@@ -102,16 +109,16 @@ namespace openfdcm::matching {
         FeatureMap(FeatureMap&& other) noexcept = default;
         FeatureMap& operator=(FeatureMap&& other) noexcept = default;
 
-        [[nodiscard]] core::LineArray getSceneLines() const {
-            return pimpl->getSceneLines();
-        }
-
         [[nodiscard]] auto getFeatureSize() const {
             return pimpl->getFeatureSize();
         }
 
+        [[nodiscard]] auto minmaxTranslation(const core::LineArray& tmpl, core::Point2 const& align_vec) const {
+            return pimpl->minmaxTranslation(tmpl, align_vec);
+        }
+
         [[nodiscard]] auto evaluate(const std::vector<core::LineArray>& templates,
-                                    const std::vector<core::Point2>& translations) const {
+                                    const std::vector<std::vector<core::Point2>>& translations) const {
             return pimpl->evaluate(templates, translations);
         }
     };
@@ -120,15 +127,7 @@ namespace openfdcm::matching {
     // ************************************************************************************************************
     // Free Functions for FeatureMap
     // ************************************************************************************************************
-    /**
-     * @brief Get the scene lines
-     * @param featuremap The given featuremap
-     * @return The scene lines
-     */
-    inline core::LineArray getSceneLines(const FeatureMap& featuremap) noexcept {
-        return featuremap.getSceneLines();
-    }
-
+    
     /**
      * @brief Get the size of the features
      * @param featuremap The given featuremap
@@ -139,15 +138,26 @@ namespace openfdcm::matching {
     }
 
     /**
-     * @brief Evaluate a vector of template on the featuremap
-     * @tparam T The specialized featuremap type
+     * @brief Compute the negative and positive values for the maximum translation of the template in the DT3 window
+     * @param featuremap The given featuremap
+     * @param tmpl The given template
+     * @param align_vec The translation vector
+     * @return The negative and positive values for the maximum translation of the template if possible
+     */
+    inline std::array<float, 2>
+    minmaxTranslation(const FeatureMap& featuremap, const core::LineArray& tmpl, core::Point2 const& align_vec) {
+        return featuremap.minmaxTranslation(tmpl, align_vec);
+    }
+
+    /**
+     * @brief Evaluate a template on the featuremap
      * @param featuremap The given featuremap
      * @param templates The given templates
-     * @param translations The translations for which to evaluate the templates
+     * @param translations The translations for which to evaluate each template
      * @return The score of the evaluation
      */
-    inline std::vector<float> evaluate(const FeatureMap& featuremap, const std::vector<core::LineArray>& templates,
-                                       const std::vector<core::Point2>& translations) {
+    inline std::vector<std::vector<float>> evaluate(const FeatureMap& featuremap, const std::vector<core::LineArray>& templates,
+                                       const std::vector<std::vector<core::Point2>>& translations) {
         return featuremap.evaluate(templates, translations);
     }
 

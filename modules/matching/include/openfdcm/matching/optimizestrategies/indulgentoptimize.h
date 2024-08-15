@@ -30,12 +30,20 @@ namespace openfdcm::matching {
     class IndulgentOptimize : public OptimizeStrategyInstance
     {
         uint32_t indulgentNumberOfPassthroughs_;
+        std::shared_ptr<BS::thread_pool> threadPool_;
     public:
-        IndulgentOptimize(uint32_t indulgentNumberOfPassthroughs) :
-        indulgentNumberOfPassthroughs_{indulgentNumberOfPassthroughs}
+        IndulgentOptimize(uint32_t indulgentNumberOfPassthroughs,
+                          std::shared_ptr<BS::thread_pool> pool = std::make_shared<BS::thread_pool>()) :
+        indulgentNumberOfPassthroughs_{indulgentNumberOfPassthroughs}, threadPool_{std::move(pool)}
+        {}
+        IndulgentOptimize(uint32_t indulgentNumberOfPassthroughs,
+                          BS::concurrency_t num_threads) :
+                indulgentNumberOfPassthroughs_{indulgentNumberOfPassthroughs},
+                threadPool_{std::make_shared<BS::thread_pool>(num_threads)}
         {}
 
         [[nodiscard]] auto getNumberOfPassthroughs() const {return indulgentNumberOfPassthroughs_;}
+        [[nodiscard]] auto getPool() const noexcept { return std::weak_ptr<BS::thread_pool>(threadPool_); }
     };
 } //namespace openfdcm::optimizerstrategies
 #endif //OPENFDCM_OPTIMIZERSTRATEGIES_INDULGENTOPTIMIZE_H
