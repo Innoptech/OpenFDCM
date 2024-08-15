@@ -30,7 +30,7 @@ jobs:
 
       - name: Build C++ project and run C++ tests
         run: |
-          mkdir OpenFDCM/build && cd OpenFDCM/build
+          mkdir build && cd build
           cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
           ctest .
 
