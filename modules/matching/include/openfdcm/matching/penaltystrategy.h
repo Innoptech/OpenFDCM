@@ -24,7 +24,7 @@ SOFTWARE.
 
 #ifndef OPENFDCM_PENALTYSTRATEGY_H
 #define OPENFDCM_PENALTYSTRATEGY_H
-#include "openfdcm/matching/matchStrategy.h"
+#include "openfdcm/matching/matchstrategy.h"
 
 namespace openfdcm::matching
 {
