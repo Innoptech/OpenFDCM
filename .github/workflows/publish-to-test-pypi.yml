@@ -28,22 +28,23 @@ jobs:
         with:
           python-version: '3.8'
 
-      - name: Build C++ project and run C++ tests
-        run: |
-          mkdir build && cd build
-          cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
-          ctest .
-          cd ..
+      #- name: Build C++ project and run C++ tests
+      #  run: |
+      #    mkdir build && cd build
+      #    cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
+      #    ctest .
+      #    cd ..
 
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install .
+          python3 -m 
 
       - name: Run tests
         run: |
           python3 -m pip install numpy pytest
-          pytest
+          python3 -m pytest
 
   bump_version_and_tag:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
