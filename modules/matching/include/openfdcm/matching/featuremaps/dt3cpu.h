@@ -7,35 +7,60 @@
 namespace openfdcm::matching {
 
     struct Dt3CpuParameters {
-        size_t depth;
-        float dt3Coeff, scale{1.f}, padding{1.f};
+        size_t depth{};   // The number of features (discrete orientation \in [-Pi/2, PI/2])
+        float dt3Coeff{}, // The orientation propagation coefficient
+        padding;   // The padding ratio (paddedSceneSize = padding * sceneSize
+
+        Dt3CpuParameters(size_t _depth=30, float _dt3Coeff=5.f, float _padding=2.2f) :
+        depth{_depth}, dt3Coeff{_dt3Coeff}, padding{_padding}
+        {};
     };
 
     class Dt3Cpu : public FeatureMapInstance
     {
-        Dt3CpuParameters params_;
+        template<typename T> using Dt3CpuMap = std::map<const float, core::RawImage<T>>;
+
+        Dt3CpuMap<float> dt3map_;
         core::Point2 sceneTranslation_;
-        core::Size sceneSize_;
-        core::LineArray scene_;
-        core::LineArray transformedScene_;
-        std::shared_ptr<BS::thread_pool> pool_;
+        core::Size featureSize_;
 
-        template<typename T> using Dt3Map = std::map<const float, core::RawImage<T>>;
-        Dt3Map<float> dt3map_;
     public:
-        Dt3Cpu(core::LineArray scene, Dt3CpuParameters params, const BS::concurrency_t num_threads=1);
+        Dt3Cpu(Dt3CpuMap<float> dt3map, core::Point2 sceneTranslation, core::Size featureSize)
+               : dt3map_{std::move(dt3map)}, sceneTranslation_{std::move(sceneTranslation)},
+                 featureSize_{std::move(featureSize)}
+        {}
 
-        [[nodiscard]] auto getParams() const {return params_;}
         [[nodiscard]] auto getSceneTranslation() const {return sceneTranslation_;}
-        [[nodiscard]] auto getSceneSize() const {return sceneSize_;}
-        [[nodiscard]] auto getScene() const {return scene_;}
-        [[nodiscard]] auto getTransformedScene() const {return transformedScene_;}
-        [[nodiscard]] auto getDt3Map() const {return dt3map_;}
-        [[nodiscard]] auto getThreadPool() const {return std::weak_ptr(pool_);};
+        [[nodiscard]] auto getFeatureSize() const {return featureSize_;}
+        [[nodiscard]] auto& getDt3Map() const {return dt3map_;}
     };
+
+    /**
+     * @brief Build the featuremap to perform the Fast Directional Chamfer Matching algorithm
+     * @param scene The scene lines
+     * @param params The Featuremap parameters
+     * @param pool A threadpool to parallelize feature map generation
+     * @return The FDCM featuremap
+     */
+    Dt3Cpu buildCpuFeaturemap(const core::LineArray &scene, const Dt3CpuParameters &params,
+                              const std::shared_ptr<BS::thread_pool> &pool=std::make_shared<BS::thread_pool>()) noexcept(false);
 
     namespace detail
     {
+        template<typename T> using Dt3CpuMap = std::map<const float, core::RawImage<T>>;
+
+        /**
+         * @brief Compute the negative and positive values for the maximum translation of the template in the dt3 window
+         * @param tmpl The given template
+         * @param align_vec The translation vector
+         * @param featuresize The dt3 window size
+         * @param extraTranslation An optional extra translation applied on the template
+         * @return The negative and positive values for the maximum translation of the template in the image window
+         */
+        std::array<float, 2>
+        minmaxTranslation(const core::LineArray& tmpl, core::Point2 const& align_vec, core::Size const& featuresize,
+                          core::Point2 const& extraTranslation=core::Point2{0.f,0.f});
+
         /**
          * @brief Get the best match in orientation of the reference line given the featuremap
          * @tparam T The tan values type
@@ -102,32 +127,17 @@ namespace openfdcm::matching {
          */
         SceneShift getSceneCenteredTranslation(core::LineArray const& scene, float scene_padding) noexcept;
 
-        template<typename T> using Dt3Map = std::map<const float, core::RawImage<T>>;
-        void propagateOrientation(Dt3Map<float> &featuremap, float coeff) noexcept;
-
         /**
-         * @brief Build the featuremap to perform the Fast Directional Chamfer Matching algorithm
-         * @param depth The number of features (discrete orientation \in [-Pi/2, PI/2])
-         * @param size The size of the features in pixels
-         * @param coeff The orientation propagation coefficient
-         * @param sceneScale A scale up factor applied only on distance and not on orientation
-         * @param linearray The array of lines
-         * @return The FDCM featuremap
+         * @brief Propagate the distance transform in the orientation (feature) space
+         * @param featuremap The feature map (32bits)
+         * @param coeff The propagation coefficient
          */
-        detail::Dt3Map<float> buildFeaturemap(size_t depth, core::Size const &size,
-                                              float coeff, core::LineArray const &linearray,
-                                              float sceneScale=1.f,
-                                              const std::weak_ptr<BS::thread_pool> &pool = std::weak_ptr<BS::thread_pool>()) noexcept(false);
-    }
-
-    template<>
-    inline core::LineArray getSceneLines(const Dt3Cpu& featuremap) noexcept {
-        return featuremap.getScene();
+        void propagateOrientation(Dt3CpuMap<float> &featuremap, float coeff) noexcept;
     }
 
     template<>
     inline core::Size getFeatureSize(const Dt3Cpu& featuremap) noexcept {
-        return featuremap.getSceneSize();
+        return featuremap.getFeatureSize();
     }
 } //namespace openfdcm::featuremaps
 #endif //OPENFDCM_FEATUREMAPS_DT3CPU_H

@@ -34,42 +34,57 @@ namespace openfdcm::matching
                               const SearchStrategy& searcher,
                               const OptimizeStrategy& optimizer,
                               const FeatureMap& featuremap,
-                              std::vector<LineArray> const& templates)
+                              std::vector<LineArray> const& templates,
+                              LineArray const& originalScene)
     {
-        if (templates.empty())
+        if (templates.empty() or originalScene.cols() == 0 or featuremap.getFeatureSize() == core::Size{0,0})
             return {};
 
-        LineArray const& originalScene = featuremap.getSceneLines();
         std::vector<Match> all_matches{};
 
         // Matching
-        for (size_t i = 0; i < templates.size(); ++i)
+        std::vector<core::LineArray> aligned_templates{}; aligned_templates.reserve(templates.size()*2);
+        std::vector<core::Point2> alignments{}; alignments.reserve(aligned_templates.size());
+        std::vector<Mat23> transforms{}; transforms.reserve(aligned_templates.size());
+
+        for (const auto & tmpl : templates)
         {
-            const LineArray& tmpl = templates.at(i);
             if (tmpl.size() == 0) continue;
             for (SearchCombination const& combination : establishSearchStrategy(searcher, tmpl, originalScene))
             {
                 const auto& scene_line = getLine(originalScene, combination.getSceneLineIdx());
                 const auto& tmpl_line = getLine(tmpl, combination.getTmplLineIdx());
                 const auto& align_vec = normalize(scene_line);
-                for (auto const& initial_transf : align(tmpl_line, scene_line))
-                {
-                    const LineArray& aligned_tmpl = transform(tmpl, initial_transf);
-                    std::optional<OptimalTranslation> const& result = optimize(
-                            optimizer, aligned_tmpl, align_vec, featuremap);
-                    if (result.has_value())
-                    {
-                        OptimalTranslation const& opt_transl = result.value();
-                        Mat23 combined = combine(opt_transl.translation, initial_transf);
-                        all_matches.push_back(
-                                Match{int(i), opt_transl.score, combined}
-                        );
-                    }
-                }
+
+                auto const& [transf, transf_rev] = align(tmpl_line, scene_line);
+                transforms.emplace_back(transf);
+                transforms.emplace_back(transf_rev);
+                aligned_templates.emplace_back(transform(tmpl, transf));
+                aligned_templates.emplace_back(transform(tmpl, transf_rev));
+                alignments.emplace_back(align_vec);
+                alignments.emplace_back(align_vec);
             }
         }
 
-        std::sort(all_matches.begin(), all_matches.end());
+        std::vector<std::optional<OptimalTranslation>> const& results = optimize(
+                optimizer, aligned_templates, alignments, featuremap);
+
+        for(size_t res_idx{0}; res_idx<aligned_templates.size(); ++res_idx)
+        {
+            auto const& res = results.at(res_idx);
+            if (res.has_value())
+            {
+                OptimalTranslation const& opt_transl = res.value();
+                Mat23 combined = combine(opt_transl.translation, transforms.at(res_idx));
+                all_matches.push_back(
+                        Match{int(res_idx/2), opt_transl.score, combined}
+                );
+            }
+        }
+
+
+        std::sort(all_matches.begin(), all_matches.end(),
+                  [](const Match& lhs, const Match& rhs){return lhs.score < rhs.score;});
 
         return all_matches;
     }

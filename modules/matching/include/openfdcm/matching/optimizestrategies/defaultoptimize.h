@@ -25,17 +25,24 @@ SOFTWARE.
 #ifndef OPENFDCM_DEFAULTOPTIMIZE_H
 #define OPENFDCM_DEFAULTOPTIMIZE_H
 #include "openfdcm/matching/optimizestrategy.h"
+#include "BS_thread_pool.hpp"
 
 namespace openfdcm::matching
 {
     class DefaultOptimize : public OptimizeStrategyInstance
     {
-    public:
-        DefaultOptimize() = default;
-    };
+        std::shared_ptr<BS::thread_pool> threadPool_;
 
-    std::tuple<float, float> minmaxTranslation(
-            const core::LineArray& tmpl, core::Point2 const& align_vec, core::Size const& featuresize) noexcept;
+    public:
+        explicit DefaultOptimize(std::shared_ptr<BS::thread_pool> pool = std::make_shared<BS::thread_pool>())
+                : threadPool_{ std::move(pool)}
+        {}
+        explicit DefaultOptimize(BS::concurrency_t num_threads)
+                : threadPool_{ std::make_shared<BS::thread_pool>(num_threads)}
+        {}
+
+        [[nodiscard]] auto getPool() const noexcept { return std::weak_ptr{threadPool_}; }
+    };
 }
 
 #endif //OPENFDCM_DEFAULTOPTIMIZE_H

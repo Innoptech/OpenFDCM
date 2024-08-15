@@ -23,6 +23,7 @@ SOFTWARE.
  */
 
 #include "catch2/catch_test_macros.hpp"
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
 #include "openfdcm/matching/featuremaps/dt3cpu.h"
 
@@ -52,13 +53,18 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         };
         // A tmpl line is already aligned and centered with a scene line
         Point2 const align_vec{1,0};
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{4, 20*20}};
+        Mat23 const transf{
+                {1,0,5},
+                {0,1,0}
+        };
 
-        auto optimal_translation = optimize(optimizer, tmpl, align_vec, featuremap);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 1.f});
+
+        auto optimal_translation = optimize(optimizer, {transform(tmpl, transf)}, {align_vec}, featuremap).at(0);
         REQUIRE(optimal_translation.has_value());
 
         OptimalTranslation const& optrans = optimal_translation.value();
-        REQUIRE(allClose(optrans.translation, Point2{5,0}));
+        REQUIRE(allClose(optrans.translation, Point2{0,0}));
         REQUIRE(optrans.score == 0);
     }
     SECTION("IndulgentOptimize: Larger template")
@@ -70,22 +76,23 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
                 {0}
         };
         const LineArray scene{
-                {3},
-                {0},
-                {6},
-                {0}
+                {3,0},
+                {0,1},
+                {6,7},
+                {0,1}
         };
         // The tmpl line is already aligned but not centered with the scene line
         // The minimal score correspond to the right most position where the tmpl line overlap all the scene line
         Point2 const align_vec{1,0};
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{4, 1}};
 
-        auto optimal_translation = optimize(optimizer, tmpl, align_vec, featuremap);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 1.f});
+
+        auto optimal_translation = optimize(optimizer, {tmpl}, {align_vec}, featuremap).at(0);
         REQUIRE(optimal_translation.has_value());
 
         OptimalTranslation const& optrans = optimal_translation.value();
         REQUIRE(allClose(optrans.translation, Point2{1,0}));
-        REQUIRE(optrans.score == 1.f);
+        REQUIRE_THAT(optrans.score, Catch::Matchers::WithinRel(1.f));
     }
     SECTION("IndulgentOptimize: template out of boundaries")
     {
@@ -102,9 +109,9 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
                 {0}
         };
         Point2 const align_vec{1,0};
-        Dt3Cpu featuremap{scene, Dt3CpuParameters{4, 1}};
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 1.f});
 
-        auto optimal_translation = optimize(optimizer, tmpl, align_vec, featuremap);
+        auto optimal_translation = optimize(optimizer, {tmpl}, {align_vec}, featuremap).at(0);
         REQUIRE_FALSE(optimal_translation.has_value());
     }
 }
