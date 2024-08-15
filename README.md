@@ -1,25 +1,41 @@
 # OpenFDCM
-A modern C++ open implementation of Fast Directional Chamfer Matching with few improvements.
+**A high-performance C++ library for Fast Directional Chamfer Matching, optimized for template matching on untextured objects.**
+
+OpenFDCM offers a modern, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, enhanced with a few key improvements for real-world applications. Designed for researchers and developers in computer vision, OpenFDCM excels at accurately matching templates in scenes lacking rich texture information.
 
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
+
+### Badges
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
 [![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg?style=flat-square)](LICENSE)  
 [![pypi](https://badge.fury.io/py/openfdcm.svg?style=flat-square)](https://badge.fury.io/py/openfdcm)
 [![build](https://github.com/Innoptech/OpenFDCM/actions/workflows/publish-to-test-pypi.yml/badge.svg?style=flat-square)](https://github.com/Innoptech/OpenFDCM/actions/workflows/publish-to-test-pypi.yml)
-[![Python](https://img.shields.io/pypi/pyversions/openfdcm.svg)](https://pypi.org/project/openfdcm/)  
-**Beta Milestone:**
-- [x] Removal of OpenCV dependency
-- [x] Python Binding
-- [x] Usage Examples
-- [ ] GPU support using GL ES shaders for full vendors support
-- [ ] Build python wheels for windows-latest
+[![Python](https://img.shields.io/pypi/pyversions/openfdcm.svg)](https://pypi.org/project/openfdcm/)
 
-# Python usage
+### Beta Milestone Progress:
+- ✅ **Removed OpenCV dependency**
+- ✅ **Python bindings available**
+- ✅ **Usage examples provided**
+- ⬜ **GPU support via OpenGL ES shaders for broader vendor compatibility**
+- ⬜ **Build Python wheels for Windows**
 
-### Install
-`pip install openfdcm` or `pip install -U git+https://github.com/Innoptech/OpenFDCM@main`
+---
+
+## Python Usage
+
+### Installation
+Get OpenFDCM via PyPI:
+```bash
+pip install openfdcm
+```
+
+Alternatively, install directly from the GitHub repository for the latest updates:
+```bash
+pip install -U git+https://github.com/Innoptech/OpenFDCM@main
+```
+
 
 ### Template matching example
 ```python
@@ -81,4 +97,7 @@ mkdir OpenFDCM/build && cd OpenFDCM/build
 cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
 ctest .
 ```
+
+# Contributions & Feedback
+We welcome contributions! Please submit pull requests or report issues directly through the [GitHub repository](https://github.com/Innoptech/OpenFDCM).
 
