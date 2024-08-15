@@ -76,7 +76,10 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
-            '-DOPENFDCM_BUILD_PYTHON:BOOL=ON'
+             '-DCMAKE_INSTALL_RPATH=$ORIGIN',
+             '-DCMAKE_BUILD_WITH_INSTALL_RPATH:BOOL=ON',
+             '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=OFF',
+             '-DOPENFDCM_BUILD_PYTHON:BOOL=ON'
         ]
 
         build_args = []
