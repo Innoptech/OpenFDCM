@@ -1,3 +1,9 @@
+## v0.5.2 (2024-08-15)
+
+### Fix
+
+- sepcify conditionnal CMAKE_CXX_FLAGS_RELEASE
+
 ## v0.5.1 (2024-08-15)
 
 ### Fix
