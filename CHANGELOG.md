@@ -1,3 +1,9 @@
+## v0.5.4 (2024-08-15)
+
+### Fix
+
+- conditionnal  CXX compiler options
+
 ## v0.5.3 (2024-08-15)
 
 ### Fix
