@@ -33,6 +33,7 @@ jobs:
           mkdir build && cd build
           cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
           ctest .
+          cd ..
 
       - name: Install dependencies
         run: |
