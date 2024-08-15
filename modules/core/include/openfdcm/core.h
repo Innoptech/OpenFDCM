@@ -25,7 +25,6 @@ SOFTWARE.
 #ifndef OPENFDCM_CORE_H
 #define OPENFDCM_CORE_H
 
-#include "core/dt3.h"
 #include "core/error.h"
 #include "core/imgproc.h"
 #include "core/drawing.h"
