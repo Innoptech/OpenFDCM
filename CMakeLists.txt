@@ -25,13 +25,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(MSVC)
+# Compiler-specific flags
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -pthread")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fno-math-errno")
+    set(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g")
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /EHsc")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2")
-else()
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi")
 endif()
-set(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g")
-
 
 # Do not allow to build in main repo
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
