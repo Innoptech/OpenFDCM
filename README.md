@@ -5,8 +5,6 @@ OpenFDCM offers a modern, lightweight implementation of the Fast Directional Cha
 
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
 
-### Badges
-
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
 [![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg?style=flat-square)](LICENSE)  
