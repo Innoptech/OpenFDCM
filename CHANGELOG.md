@@ -1,3 +1,9 @@
+## v0.5.5 (2024-08-15)
+
+### Fix
+
+- add OPENBLAS_NUM_THREADS=1 for numpy on python 3.13
+
 ## v0.5.4 (2024-08-15)
 
 ### Fix
