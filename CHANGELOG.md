@@ -1,3 +1,10 @@
+## v0.5.10 (2024-08-15)
+
+### Fix
+
+- windows wheels
+- windows wheels
+
 ## v0.5.9 (2024-08-15)
 
 ### Fix
