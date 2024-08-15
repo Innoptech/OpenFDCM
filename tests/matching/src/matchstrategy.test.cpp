@@ -60,6 +60,7 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         REQUIRE(matches.size() == std::min(max_tmpl_lines, numberOfLines) * std::min(numberOfLines, max_scene_lines) * 2);
         REQUIRE(allClose(scene_transform.block<2, 2>(0, 0), best_match_rotation, 1e-5));
         REQUIRE(allClose(scene_transform.block<2, 1>(0, 2), best_match_translation, 1e0 * 1 / scene_ratio));
+        REQUIRE(matches[0].tmplIdx == 0);
     }
 
     // Test for translation
@@ -74,6 +75,7 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         REQUIRE(matches.size() == max_tmpl_lines * max_scene_lines * 2);
         REQUIRE(allClose(scene_transform.block<2, 2>(0, 0), best_match_rotation, 1e-5));
         REQUIRE(allClose(scene_transform.block<2, 1>(0, 2), best_match_translation, 1e0 * 1 / scene_ratio));
+        REQUIRE(matches[0].tmplIdx == 0);
     }
 
     // Test for empty scene

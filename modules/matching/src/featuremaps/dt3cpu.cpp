@@ -110,7 +110,6 @@ namespace openfdcm::matching
             return {detail::Dt3CpuMap<float>{}, core::Point2{0,0}, core::Size{0,0}};
 
         // Shift the scene so that all scene lines are greater than 0.
-        // DT3 requires that all line points have positive values
         detail::SceneShift const& sceneShift = detail::getSceneCenteredTranslation(scene, params.padding);
         const core::LineArray translatedScene = core::translate(scene, sceneShift.translation);
 
@@ -124,11 +123,15 @@ namespace openfdcm::matching
 
         // Step 3: Build featuremap with distance transform
         detail::Dt3CpuMap<float> dt3map{};
+        std::mutex dt3map_mutex;  // Mutex to protect access to dt3map
 
         auto func = [&](float angle) {
             Eigen::VectorXi indices = detail::vectorToEigenVector(classified_lines.at(angle));
             core::RawImage<float> distance_transformed =
                     core::distanceTransform<float>(translatedScene(Eigen::all, indices), sceneShift.sceneSize);
+
+            // Lock the mutex to safely update dt3map
+            std::lock_guard<std::mutex> lock(dt3map_mutex);
             dt3map[angle] = std::move(distance_transformed);
         };
 
