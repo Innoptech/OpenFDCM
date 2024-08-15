@@ -26,7 +26,7 @@ testpaths = ["tests/python"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.5.14"
+version = "0.5.15"
 tag_format = "v$version"
 
 [tool.cibuildwheel]
