@@ -78,7 +78,8 @@ namespace openfdcm::matching
             auto const& res = results.at(res_idx);
             if (res.has_value())
             {
-                OptimalTranslation const& opt_transl = res.value();
+
+                OptimalTranslation const& opt_transl = *res;
                 Mat23 combined = combine(opt_transl.translation, transforms.at(res_idx));
                 all_matches.push_back(
                         Match{template_indices[res_idx], opt_transl.score, combined}

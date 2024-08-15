@@ -64,7 +64,7 @@ TEST_CASE("DefaultOptimize", "[openfdcm::matching, openfdcm::matching::DefaultOp
         auto optimal_translation = optimize(optimizer, {transform(tmpl, transf)}, {align_vec}, featuremap).at(0);
         REQUIRE(optimal_translation.has_value());
 
-        OptimalTranslation const& optrans = optimal_translation.value();
+        OptimalTranslation const& optrans = *optimal_translation;
         REQUIRE(allClose(optrans.translation, Point2{0,0}));
         REQUIRE(optrans.score == 0);
     }
@@ -91,7 +91,7 @@ TEST_CASE("DefaultOptimize", "[openfdcm::matching, openfdcm::matching::DefaultOp
         auto optimal_translation = optimize(optimizer, {tmpl}, {align_vec}, featuremap).at(0);
         REQUIRE(optimal_translation.has_value());
 
-        OptimalTranslation const& optrans = optimal_translation.value();
+        OptimalTranslation const& optrans = *optimal_translation;
         REQUIRE(allClose(optrans.translation, Point2{1,0}));
         REQUIRE_THAT(optrans.score, Catch::Matchers::WithinRel(1.f));
     }
