@@ -119,10 +119,7 @@ class CMakeBuild(build_ext):
             # Multi-config generators have a different way to specify configs
             if not single_config:
                 cmake_args += [
-                    f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}",
-                        '-DCMAKE_INSTALL_RPATH=$ORIGIN',
-                        '-DCMAKE_BUILD_WITH_INSTALL_RPATH:BOOL=ON',
-                        '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=OFF',
+                    f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}"
                 ]
                 build_args += ["--config", cfg]
 
