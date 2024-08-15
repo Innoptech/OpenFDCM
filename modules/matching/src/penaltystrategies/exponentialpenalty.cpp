@@ -34,9 +34,9 @@ namespace openfdcm::matching
     std::vector<Match> penalize(const ExponentialPenalty &penalty, const std::vector<Match> &matches,
                                 const std::vector<float> &templatelengths)
     {
+        std::vector<Match> applied_penalty{};
         try {
             auto tau = penalty.getTau();
-            std::vector<Match> applied_penalty{};
             for(Match const& match : matches)
             {
                 size_t const tmpl_idx = match.tmplIdx;
@@ -44,7 +44,6 @@ namespace openfdcm::matching
                 float const applied_score = match.score/std::pow(len,tau);
                 applied_penalty.push_back(Match{int(tmpl_idx), applied_score, match.transform});
             }
-            return applied_penalty;
         } catch (const std::out_of_range& e)
         {
             // Verify that max index in match is lower than templatelengths size
@@ -61,5 +60,6 @@ namespace openfdcm::matching
                         "In penalize, the size of templatelengths is not consistent with match template indices"};
             }
         }
+        return applied_penalty;
     }
 }
