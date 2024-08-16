@@ -27,7 +27,6 @@ SOFTWARE.
 #include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
 #include "openfdcm/matching/featuremaps/dt3cpu.h"
 
-#include <iostream>
 
 using namespace openfdcm::core;
 using namespace openfdcm::matching;
@@ -78,9 +77,9 @@ TEST_CASE("DefaultOptimize", "[openfdcm::matching, openfdcm::matching::DefaultOp
         };
         const LineArray scene{
                 {3,0},
-                {0,1},
+                {0,10},
                 {6,7},
-                {0,1}
+                {0,10}
         };
         // The tmpl line is already aligned but not centered with the scene line
         // The minimal score correspond to the right most position where the tmpl line overlap all the scene line
@@ -92,7 +91,7 @@ TEST_CASE("DefaultOptimize", "[openfdcm::matching, openfdcm::matching::DefaultOp
         REQUIRE(optimal_translation.has_value());
 
         OptimalTranslation const& optrans = *optimal_translation;
-        REQUIRE(allClose(optrans.translation, Point2{1,0}));
+        REQUIRE(allClose(optrans.translation, Point2{2,0}));
         REQUIRE_THAT(optrans.score, Catch::Matchers::WithinRel(1.f));
     }
     SECTION("DefaultOptimize: template out of boundaries")
