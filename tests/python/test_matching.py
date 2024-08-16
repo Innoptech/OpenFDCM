@@ -1,4 +1,4 @@
-import pytest
+import pytest, os
 import numpy as np
 import openfdcm
 
@@ -99,6 +99,18 @@ def run_test(scene_ratio, num_threads):
 @pytest.mark.parametrize("num_threads", [4])
 def test_matching(scene_ratio, num_threads):
     run_test(scene_ratio, num_threads)
+
+def test_write_read():
+    lines = create_lines(100, 10)
+    filepath: str = "./test_write_array.lines"
+    openfdcm.write(filepath, lines)
+    try:
+        read_lines = openfdcm.read(filepath)
+        os.remove(filepath)
+        assert all_close(lines, read_lines)
+    except:
+        os.remove(filepath)
+
 
 if __name__ == "__main__":
     pytest.main()
