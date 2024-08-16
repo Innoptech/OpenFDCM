@@ -42,11 +42,9 @@ TEST_CASE( "serialize" )
                 TestConfig::linecount, std::min(TestConfig::size.x(), TestConfig::size.y()));
 
         std::stringstream ss;
-        std::ostreambuf_iterator<char> it_out{ss};
-        serializeLines(original_lines, it_out);
+        packio::serialize(original_lines, ss);
 
-        std::istreambuf_iterator<char> it_in{ss}, end;
-        const LineArray& restituted_lines = deserializeLines(it_in, end);
+        const LineArray& restituted_lines = packio::deserialize<LineArray>(ss);
         REQUIRE(allClose(original_lines, restituted_lines));
     }
 
