@@ -134,17 +134,17 @@ namespace openfdcm::core {
 
 namespace packio {
     template<>
-    constexpr std::array<char, 16> serializeSignature<openfdcm::core::LineArray>() {
+    inline constexpr std::array<char, 16> serializeSignature<openfdcm::core::LineArray>() {
         return {'O', 'P', 'E', 'N', 'F', 'D', 'C', 'M',};
     }
 
     template<>
-    void serializeBody(const openfdcm::core::LineArray &serializable, std::ostream &stream) {
+    inline void serializeBody(const openfdcm::core::LineArray &serializable, std::ostream &stream) {
         return openfdcm::core::serializeLines(serializable, stream);
     }
 
     template<>
-    openfdcm::core::LineArray deserializeBody<openfdcm::core::LineArray>(std::istream &stream) {
+    inline openfdcm::core::LineArray deserializeBody<openfdcm::core::LineArray>(std::istream &stream) {
         return openfdcm::core::deserializeLines(stream);
     }
 }
