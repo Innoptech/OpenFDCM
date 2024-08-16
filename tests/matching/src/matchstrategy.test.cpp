@@ -45,7 +45,7 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
     DefaultOptimize optimizerStrategy{threadpool};
     DefaultMatch matcher{};
     size_t const numberOfLines{10};
-    size_t const lineLength{100};
+    size_t const lineLength{10};
     LineArray tmpl = tests::createLines(numberOfLines, lineLength);
 
     // Test for rotation
