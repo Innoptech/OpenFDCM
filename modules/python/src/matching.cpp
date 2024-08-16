@@ -260,5 +260,17 @@ void matching(py::module_ &m) {
           {
               return matching::search(matcher, searcher, optimizer, featuremap, templates, scene);
           },
-          "matcher"_a, "searcher"_a, "optimizer"_a, "featuremap"_a, "templates"_a, "scene"_a);
+          "matcher"_a, "searcher"_a, "optimizer"_a, "featuremap"_a, "templates"_a, "scene"_a,
+          "Search for optimal matches between the templates and the scene");
+
+    m.def("penalize", [](const PenaltyStrategy &penalty, const std::vector<Match> &matches,
+                         const std::vector<float> &templatelengths)
+          {
+              return matching::penalize(penalty, matches, templatelengths);
+          },
+          "penalty"_a, "matches"_a, "templatelengths"_a,
+          "Apply a given score penalty on a vector of matches");
+
+    m.def("get_template_lengths", &core::getTemplateLengths, "templates"_a,
+          "Get the lengths of templates represented by line arrays");
 }
