@@ -24,19 +24,19 @@ SOFTWARE.
 
 #include "catch2/catch_test_macros.hpp"
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
-#include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
+#include "openfdcm/matching/optimizestrategies/batchoptimize.h"
 #include "openfdcm/matching/featuremaps/dt3cpu.h"
+
 
 using namespace openfdcm::core;
 using namespace openfdcm::matching;
 
 
-TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
+TEST_CASE("BatchOptimize", "[openfdcm::matching, openfdcm::matching::BatchOptimize, openfdcm::matching::Dt3Cpu]")
 {
-    uint32_t indulgentNumPassthroughs{3};
-    OptimizeStrategy optimizer = IndulgentOptimize{indulgentNumPassthroughs};
+    OptimizeStrategy optimizer = BatchOptimize{10, 1};
 
-    SECTION("IndulgentOptimize: Perfect optimization")
+    SECTION("BatchOptimize: Perfect optimization")
     {
         const LineArray tmpl{
                 {10,0},
@@ -67,7 +67,7 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         REQUIRE(allClose(optrans.translation, Point2{0,0}));
         REQUIRE(optrans.score == 0);
     }
-    SECTION("IndulgentOptimize: Larger template")
+    SECTION("BatchOptimize: Larger template")
     {
         const LineArray tmpl{
                 {0},
@@ -94,7 +94,7 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         REQUIRE(allClose(optrans.translation, Point2{2,0}));
         REQUIRE_THAT(optrans.score, Catch::Matchers::WithinRel(1.f));
     }
-    SECTION("IndulgentOptimize: template out of boundaries")
+    SECTION("BatchOptimize: template out of boundaries")
     {
         const LineArray tmpl{
                 {0},

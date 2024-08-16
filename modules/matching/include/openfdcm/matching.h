@@ -16,6 +16,7 @@
 // optimizestrategies
 #include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
 #include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
+#include "openfdcm/matching/optimizestrategies/batchoptimize.h"
 
 // penaltystrategies
 #include "openfdcm/matching/penaltystrategies/defaultpenalty.h"

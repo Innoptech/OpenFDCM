@@ -32,6 +32,7 @@ SOFTWARE.
 
 #include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
 #include "openfdcm/matching/optimizestrategies/indulgentoptimize.h"
+#include "openfdcm/matching/optimizestrategies/batchoptimize.h"
 
 #include "openfdcm/matching/penaltystrategies/defaultpenalty.h"
 #include "openfdcm/matching/penaltystrategies/exponentialpenalty.h"
@@ -141,8 +142,19 @@ void matching(py::module_ &m) {
                        std::to_string(a.getNumberOfPassthroughs()) + ">";
             });
 
+    py::class_<BatchOptimize>(m, "BatchOptimize")
+            .def(py::init<size_t, std::shared_ptr<BS::thread_pool>>(), "batch_size"_a, "pool"_a = std::make_shared<BS::thread_pool>(),
+                 "Constructor that accepts a thread pool with an optional default pool.")
+            .def(py::init<size_t, BS::concurrency_t>(), "batch_size"_a, "num_threads"_a, "Constructor that accepts a number of threads.")
+            .def("get_batch_size", &BatchOptimize::getBatchSize, "Returns the batch size.")
+            .def("get_pool", &BatchOptimize::getPool, "Returns the thread pool as a shared pointer.")
+            .def("__repr__", [](const BatchOptimize &a) {
+                return "<BatchOptimize>";
+            });
+
     py::implicitly_convertible<DefaultOptimize, OptimizeStrategy>();
     py::implicitly_convertible<IndulgentOptimize, OptimizeStrategy>();
+    py::implicitly_convertible<BatchOptimize, OptimizeStrategy>();
 
     // ---------------------------------------------------------
     // Penalty strategies
