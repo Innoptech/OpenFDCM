@@ -77,9 +77,9 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         };
         const LineArray scene{
                 {3,0},
-                {0,1},
+                {0,10},
                 {6,7},
-                {0,1}
+                {0,10}
         };
         // The tmpl line is already aligned but not centered with the scene line
         // The minimal score correspond to the right most position where the tmpl line overlap all the scene line
@@ -91,7 +91,7 @@ TEST_CASE("IndulgentOptimize", "[openfdcm::matching]")
         REQUIRE(optimal_translation.has_value());
 
         OptimalTranslation const& optrans = *optimal_translation;
-        REQUIRE(allClose(optrans.translation, Point2{1,0}));
+        REQUIRE(allClose(optrans.translation, Point2{2,0}));
         REQUIRE_THAT(optrans.score, Catch::Matchers::WithinRel(1.f));
     }
     SECTION("IndulgentOptimize: template out of boundaries")
