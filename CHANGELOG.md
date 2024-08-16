@@ -1,3 +1,9 @@
+## v0.7.0 (2024-08-16)
+
+### Feat
+
+- simplify serialization with packio
+
 ## v0.6.0 (2024-08-16)
 
 ### Feat
