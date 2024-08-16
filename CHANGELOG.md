@@ -1,3 +1,25 @@
+## v0.6.0 (2024-08-16)
+
+### Feat
+
+- introduce batchoptimize
+
+### Fix
+
+- introduce batchoptimize in matching header
+
+## v0.5.15 (2024-08-15)
+
+### Fix
+
+- pipy Classifiers
+
+## v0.5.14 (2024-08-15)
+
+### Fix
+
+- trigger build
+
 ## v0.5.13 (2024-08-15)
 
 ### Fix

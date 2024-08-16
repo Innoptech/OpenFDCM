@@ -5,8 +5,6 @@ OpenFDCM offers a modern, lightweight implementation of the Fast Directional Cha
 
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
 
-### Badges
-
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
 [![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg?style=flat-square)](LICENSE)  
@@ -47,7 +45,6 @@ scene = # A 4xM array representing the M scene lines
 # Perform template matching
 max_tmpl_lines, max_scene_lines = 4, 4  # Combinatory search parameters.
 depth = 30              # The [0, pi] discretization.
-scene_ratio = 1.0       # The image size ratio used for FDCM algorithm. Relative to the scene lines length.
 scene_padding = 1.5     # Pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
 coeff = 5.0             # A weighting factor to enhance the angular cost vs distance cost in FDCM algorithm.
 num_threads = 4
