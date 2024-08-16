@@ -1,3 +1,9 @@
+## v0.8.0 (2024-08-16)
+
+### Feat
+
+- introduce compression with new version of packio
+
 ## v0.7.0 (2024-08-16)
 
 ### Feat
