@@ -51,6 +51,7 @@ def run_test(scene_ratio, num_threads):
     search_strategy = openfdcm.DefaultSearch(max_tmpl_lines, max_scene_lines)
     optimizer_strategy = openfdcm.DefaultOptimize(threadpool)
     matcher = openfdcm.DefaultMatch()
+    penalizer = openfdcm.ExponentialPenalty(1.5)
     number_of_lines = 10
     line_length = 100
     tmpl = create_lines(number_of_lines, line_length)
@@ -73,6 +74,8 @@ def run_test(scene_ratio, num_threads):
     scene = apply_transform(tmpl, scene_transform)
     featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
     matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+    matches = openfdcm.penalize(penalizer, matches, openfdcm.get_template_lengths([tmpl]))
+
     best_match_rotation = matches[0].transform[:2, :2]
     best_match_translation = matches[0].transform[:2, 2]
 
