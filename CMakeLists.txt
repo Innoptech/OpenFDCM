@@ -68,10 +68,12 @@ endif()
 #-------------------------------------------------------------------------------
 # Add external components
 #-------------------------------------------------------------------------------
-ReadDependencyVersion(eigen3 ${PYPROJECT_PATH})
 ReadDependencyVersion(threadpool ${PYPROJECT_PATH})
-add_subdirectory(extern/eigen3)
+ReadDependencyVersion(eigen3 ${PYPROJECT_PATH})
+ReadDependencyVersion(packio ${PYPROJECT_PATH})
 add_subdirectory(extern/threadpool)
+add_subdirectory(extern/eigen3)
+add_subdirectory(extern/packio)
 
 #-------------------------------------------------------------------------------
 # CONFIGURATIONS

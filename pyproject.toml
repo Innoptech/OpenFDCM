@@ -39,5 +39,6 @@ before-build = "rm -rf {project}/build"
 [tool.poetry.dependencies]
 threadpool = "v4.1.0"
 eigen3 = "3.4.0"
+packio = "v0.1.0"
 pybind11 = "v2.13.1"
 catch2 = "v3.4.0"
