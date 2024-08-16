@@ -168,13 +168,13 @@ void matching(py::module_ &m) {
             });
 
     py::class_<DefaultPenalty>(m, "DefaultPenalty")
-            .def(py::init<>())
+            .def(py::init<>(), "Penalize the matches given the template length (1/(n)")
             .def("__repr__", [](const DefaultPenalty &a) {
                 return "<DefaultPenalty>";
             });
 
     py::class_<ExponentialPenalty>(m, "ExponentialPenalty")
-            .def(py::init<float>())
+            .def(py::init<float>(), "tau"_a, "Penalize the matches given the template length (1/(n^tau)")
             .def("get_tau", &ExponentialPenalty::getTau)
             .def("__repr__", [](const ExponentialPenalty &a) {
                 return "<ExponentialPenalty: tau=" + std::to_string(a.getTau()) + ">";
@@ -194,7 +194,7 @@ void matching(py::module_ &m) {
             });
 
     py::class_<DefaultSearch>(m, "DefaultSearch")
-            .def(py::init<size_t const, size_t const>())
+            .def(py::init<size_t const, size_t const>(), "max_tmpl_lines"_a, "max_scene_lines"_a)
             .def("get_max_tmpl_lines", &DefaultSearch::getMaxTmplLines)
             .def("get_max_scene_lines", &DefaultSearch::getMaxSceneLines)
             .def("__repr__", [](const DefaultSearch &a) {
@@ -203,7 +203,8 @@ void matching(py::module_ &m) {
             });
 
     py::class_<ConcentricRangeStrategy>(m, "ConcentricRangeStrategy")
-            .def(py::init<size_t const, size_t const, core::Point2, float const, float const>())
+            .def(py::init<size_t const, size_t const, core::Point2, float const, float const>(),
+                    "max_tmpl_lines"_a, "max_scene_lines"_a, "center_position"_a, "low_boundary"_a, "high_boundary"_a)
             .def("get_max_tmpl_lines", &ConcentricRangeStrategy::getMaxTmplLines)
             .def("get_max_scene_lines", &ConcentricRangeStrategy::getMaxSceneLines)
             .def("get_center_position", &ConcentricRangeStrategy::getCenterPosition)
