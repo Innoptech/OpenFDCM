@@ -113,6 +113,7 @@ void matching(py::module_ &m) {
     py::class_<OptimizeStrategy>(m, "OptimizeStrategy")
             .def(py::init<const DefaultOptimize&>())
             .def(py::init<const IndulgentOptimize&>())
+            .def(py::init<const BatchOptimize&>())
             .def("__repr__", [](const OptimizeStrategy &a) {
                 return "<OptimizeStrategy>";
             });
