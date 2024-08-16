@@ -38,7 +38,6 @@ namespace openfdcm::matching
             auto [min_point, max_point] = core::minmaxPoint(tmpl);
             min_point += extraTranslation;
             max_point += extraTranslation;
-            core::Point2 diff = (size - 1 - max_point.array());
 
             if (((size - 1 - max_point.array() ) < 0).any())
                 return {NAN, NAN};
