@@ -1,7 +1,7 @@
 # OpenFDCM
 **A high-performance C++ library for Fast Directional Chamfer Matching, optimized for template matching on untextured objects.**
 
-OpenFDCM offers a modern, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, enhanced with a few key improvements for real-world applications. Designed for researchers and developers in computer vision, OpenFDCM excels at accurately matching templates in scenes lacking rich texture information.
+OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, built for precise template matching in low-texture scenes. It balances speed and accuracy for real-world computer vision tasks, using only classical computer vision techniques — no AI involved. This ensures a deterministic, repeatable method that adapts quickly to new, unseen objects, making it ideal for manufacturing industries where reliability, ease of diagnosis, and seamless integration are crucial.
 
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
 ![DT3 FDCM Maps](docs/static/object_pose_estimation.png)
