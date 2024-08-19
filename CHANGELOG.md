@@ -1,3 +1,10 @@
+## v0.8.1 (2024-08-19)
+
+### Fix
+
+- introduce match penalization
+- BatchOptimize implicit conversion to OptimiseStrategy in python
+
 ## v0.8.0 (2024-08-16)
 
 ### Feat
