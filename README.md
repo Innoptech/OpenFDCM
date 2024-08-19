@@ -4,6 +4,7 @@
 OpenFDCM offers a modern, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, enhanced with a few key improvements for real-world applications. Designed for researchers and developers in computer vision, OpenFDCM excels at accurately matching templates in scenes lacking rich texture information.
 
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
+![DT3 FDCM Maps](docs/static/object_pose_estimation.png)
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
