@@ -16,6 +16,9 @@ message(STATUS "Adding openfdcm::matching module")
 if (NOT TARGET openfdcm::core)
     message( FATAL_ERROR "openfdcm::core could not be found")
 endif()
+if (NOT TARGET threadpool)
+    message( FATAL_ERROR "threadpool could not be found")
+endif()
 
 #-------------------------------------------------------------------------------
 # CMAKE CONFIGURATIONS
