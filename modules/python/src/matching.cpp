@@ -274,4 +274,14 @@ void matching(py::module_ &m) {
 
     m.def("get_template_lengths", &core::getTemplateLengths, "templates"_a,
           "Get the lengths of templates represented by line arrays");
+
+    m.def("sort_matches", [](std::vector<Match> &matches)
+    {
+        std::sort(std::begin(matches), std::end(matches),
+                  [](const Match& lhs, const Match& rhs) { return lhs.score < rhs.score; });
+        return matches;
+    }, "matches"_a, "Sort the matches by score, with the best score (lowest) first.");
+
+
+
 }

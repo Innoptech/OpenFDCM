@@ -48,7 +48,7 @@ namespace openfdcm::matching
         std::vector<core::Point2> alignments{}; alignments.reserve(aligned_templates.size());
         std::vector<Mat23> transforms{}; transforms.reserve(aligned_templates.size());
 
-        for (int tmpl_idx{0}; tmpl_idx<templates.size(); ++tmpl_idx)
+        for (size_t tmpl_idx{0}; tmpl_idx<templates.size(); ++tmpl_idx)
         {
             auto const& tmpl = templates[tmpl_idx];
             if (tmpl.size() == 0) continue;
@@ -75,21 +75,15 @@ namespace openfdcm::matching
 
         for(size_t res_idx{0}; res_idx<aligned_templates.size(); ++res_idx)
         {
-            auto const& res = results.at(res_idx);
+            auto const& res = results[res_idx];
             if (res.has_value())
             {
 
                 OptimalTranslation const& opt_transl = *res;
                 Mat23 combined = combine(opt_transl.translation, transforms.at(res_idx));
-                all_matches.push_back(
-                        Match{template_indices[res_idx], opt_transl.score, combined}
-                );
+                all_matches.emplace_back(template_indices[res_idx], opt_transl.score, combined);
             }
         }
-
-
-        std::sort(all_matches.begin(), all_matches.end(),
-                  [](const Match& lhs, const Match& rhs){return lhs.score < rhs.score;});
 
         return all_matches;
     }
