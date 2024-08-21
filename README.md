@@ -1,10 +1,4 @@
 # OpenFDCM
-**A high-performance C++ library for Fast Directional Chamfer Matching, optimized for template matching on untextured objects.**
-
-OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, built for precise template matching in low-texture scenes. It balances speed and accuracy for real-world computer vision tasks, using only classical computer vision techniques — no AI involved. This ensures a deterministic, repeatable method that adapts quickly to new, unseen objects, making it ideal for manufacturing industries where reliability, ease of diagnosis, and seamless integration are crucial.
-
-![DT3 FDCM Maps](docs/static/object_pose_estimation_lines.png)
-![DT3 FDCM Maps](docs/static/DT3Map.png)
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
@@ -12,6 +6,13 @@ OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer M
 [![pypi](https://badge.fury.io/py/openfdcm.svg?style=flat-square)](https://badge.fury.io/py/openfdcm)
 [![build](https://github.com/Innoptech/OpenFDCM/actions/workflows/publish-to-test-pypi.yml/badge.svg?style=flat-square)](https://github.com/Innoptech/OpenFDCM/actions/workflows/publish-to-test-pypi.yml)
 [![Python](https://img.shields.io/pypi/pyversions/openfdcm.svg)](https://pypi.org/project/openfdcm/)
+
+**A high-performance C++ library for Fast Directional Chamfer Matching, optimized for template matching on untextured objects.**
+
+OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, built for precise template matching in low-texture scenes. It balances speed and accuracy for real-world computer vision tasks, using only classical computer vision techniques — no AI involved. This ensures a deterministic, repeatable method that adapts quickly to new, unseen objects, making it ideal for manufacturing industries where reliability, ease of diagnosis, and seamless integration are crucial.
+
+![DT3 FDCM Maps](docs/static/object_pose_estimation_lines.png)
+![DT3 FDCM Maps](docs/static/DT3Map.png)
 
 ### Beta Milestone Progress:
 - ✅ **Removed OpenCV dependency**
