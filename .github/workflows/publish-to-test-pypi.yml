@@ -49,27 +49,22 @@ jobs:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
     name: Bump version and tag on main
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    outputs:
-      version_bumped: ${{ steps.cz.outputs.version }}
     steps:
       - name: Check out
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ github.token }}
-      - id: cz
-        name: Create bump and changelog
+          ssh-key: "${{ secrets.COMMIT_KEY }}"
+      - name: Create bump and changelog
         uses: commitizen-tools/commitizen-action@master
         with:
-          github_token: ${{ github.token }}
-      - name: Print Version
-        run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
+          push: false
+      - name: Push using ssh
+        run: |
+          git push origin main --tags
 
   build_wheels:
-    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.bump_version_and_tag.outputs.version_bumped != ''"
+    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && startsWith(github.event.head_commit.message, 'bump:')"
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
