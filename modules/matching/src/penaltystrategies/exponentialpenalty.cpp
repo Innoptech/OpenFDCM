@@ -54,7 +54,7 @@ namespace openfdcm::matching
                         return a.tmplIdx < b.tmplIdx;
                     }
             );
-            if(max_it->tmplIdx >= templatelengths.size())
+            if(max_it->tmplIdx >= static_cast<int>(templatelengths.size()))
             {
                 throw std::out_of_range{
                         "In penalize, the size of templatelengths is not consistent with match template indices"};
