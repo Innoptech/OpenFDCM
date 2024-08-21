@@ -3,8 +3,8 @@
 
 OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, built for precise template matching in low-texture scenes. It balances speed and accuracy for real-world computer vision tasks, using only classical computer vision techniques — no AI involved. This ensures a deterministic, repeatable method that adapts quickly to new, unseen objects, making it ideal for manufacturing industries where reliability, ease of diagnosis, and seamless integration are crucial.
 
-![DT3 FDCM Maps](docs/static/DT3Map.png)
 ![DT3 FDCM Maps](docs/static/object_pose_estimation_lines.png)
+![DT3 FDCM Maps](docs/static/DT3Map.png)
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg?style=flat-square)](https://conventionalcommits.org)
@@ -17,8 +17,8 @@ OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer M
 - ✅ **Removed OpenCV dependency**
 - ✅ **Python bindings available**
 - ✅ **Usage examples provided**
-- ⬜ **GPU support via OpenGL ES shaders for broader vendor compatibility**
-- ⬜ **Build Python wheels for Windows**
+- ⬜ **GPU support via OpenGL ES or OpenCL for multiple vendor compatibility**
+- ⬜ **Build Python wheels for Windows in ci**
 
 ---
 
@@ -37,7 +37,7 @@ pip install -U git+https://github.com/Innoptech/OpenFDCM@main
 
 
 ### Template matching example
-For a complete example in python, see the [jupyter notebooks](notebooks).
+For complete examples in python, see the [jupyter notebooks](notebooks).
 
 ```python
 import openfdcm
@@ -76,10 +76,10 @@ result_rotation = best_match.transform[0:2, 0:2]
 result_translation = best_match.transform[0:2, 2]
 ```
 
-### 6-DOF estimation
+## 6-DOF estimation
 The illustration of the six degrees of freedom of a detected object. The blue arrows represent the degrees of freedom in the image plane. The set of blue and red arrows represents the degrees of freedom in space. In a), the rotation axes in SO(3) are illustrated, and in b), the translation axes in T(3).
 
-<img src="docs/static/pose_estimation_dof.png" alt="Pose estimation DOF visualization" width="45%" />
+<img src="docs/static/pose_estimation_dof.png" alt="Pose estimation DOF visualization" width="80%" />
 
 Template matching on a single view provides 5 Degrees of Freedom (DOF) per detection, with the final missing DOF for full 6-DOF estimation requiring at least two views of the same scene, combined with calibrated extrinsic parameters.
 
@@ -92,12 +92,11 @@ Procedure (about 5 - 30ms per scene):
 4. We triangulate and filter out the match candidates using a voting-scheme algorithm from the multiview detections (will come in a future Open-Source library).
 5. From the filtered matches, we combine the corresponding template information, the triangulated position and the image in-plane rotation (rotation in z) to retreive full 6-DOF pose.
 
-<img src="docs/static/pose_estimation_procedure.png" alt="Pose estimation procedure" width="45%" />
+<img src="docs/static/pose_estimation_procedure.png" alt="Pose estimation procedure" width="80%" />
 
 
-# C++ usage
-### Requirements
-C++20 or higher.
+## C++ usage
+Require C++20 or higher.
 
 ### Integrate to your codebase
 Include this repository with CMAKE Fetchcontent and link your executable/library to `openfdcm::matching library`.   
@@ -114,7 +113,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(openfdcm)
 ```
 
-# Test
+### Test
 ```bash
 git clone https://github.com/Innoptech/OpenFDCM
 mkdir OpenFDCM/build && cd OpenFDCM/build
@@ -122,6 +121,11 @@ cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
 ctest .
 ```
 
-# Contributions & Feedback
+## Contributions & Feedback
 We welcome contributions! Please submit pull requests or report issues directly through the [GitHub repository](https://github.com/Innoptech/OpenFDCM).
 
+## Citing OpenFDCM
+If you use OpenFDCM in your research, please use the following BibTeX entry.
+```bibtex
+%Bibtex to come
+```
