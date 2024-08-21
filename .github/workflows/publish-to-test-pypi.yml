@@ -49,6 +49,8 @@ jobs:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
     name: Bump version and tag on main
     runs-on: ubuntu-latest
+    outputs:
+      version_bumped: ${{ steps.cz.outputs.version }}
     steps:
       - name: Check out
         uses: actions/checkout@v3
@@ -64,7 +66,7 @@ jobs:
         run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
 
   build_wheels:
-    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && steps.cz.outputs.version != ''"
+    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.bump_version_and_tag.outputs.version_bumped != ''"
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
