@@ -1,3 +1,9 @@
+## v0.8.3 (2024-08-21)
+
+### Fix
+
+- docs and trigger a build
+
 ## v0.8.2 (2024-08-21)
 
 ### Fix
