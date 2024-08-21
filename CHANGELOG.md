@@ -1,3 +1,10 @@
+## v0.8.2 (2024-08-21)
+
+### Fix
+
+- types comparison
+- let the user sort the matches
+
 ## v0.8.1 (2024-08-19)
 
 ### Fix
