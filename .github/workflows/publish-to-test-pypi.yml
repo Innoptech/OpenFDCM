@@ -1,4 +1,3 @@
----
 name: Publish OpenFDCM
 on:
   push:
@@ -49,18 +48,32 @@ jobs:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
     name: Bump version and tag on main
     runs-on: ubuntu-latest
+    outputs:
+      version_bumped: ${{ steps.check_bump_version.outputs.version_bumped }}
     steps:
       - name: Check out
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
           ssh-key: "${{ secrets.COMMIT_KEY }}"
+      
       - name: Create bump and changelog
+        id: cz
         uses: commitizen-tools/commitizen-action@master
         with:
           push: false
+
+      - name: Check if version was bumped
+        id: check_bump_version
+        run: |
+          if [[ "${{ steps.cz.outputs.version }}" != "$(git describe --tags --abbrev=0)" ]]; then
+            echo "version_bumped=true" >> $GITHUB_ENV
+          else
+            echo "version_bumped=false" >> $GITHUB_ENV
+
       - name: Print Version
         run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
+
       - name: Push using ssh
         if: github.event_name == 'push'
         run: |
@@ -70,7 +83,7 @@ jobs:
           git push 
 
   build_wheels:
-    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && startsWith(github.event.head_commit.message, 'bump:')"
+    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && env.version_bumped == 'true'"
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
