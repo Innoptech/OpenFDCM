@@ -60,26 +60,28 @@ def run_test(scene_ratio, num_threads):
     scene = apply_transform(tmpl, scene_transform)
 
     featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
-    matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+    raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+    sorted_matches = openfdcm.sort_matches(raw_matches)
 
-    best_match_transform = matches[0].transform
+    best_match_transform = sorted_matches[0].transform
     best_match_rotation = best_match_transform[:2, :2]
     best_match_translation = best_match_transform[:2, 2]
 
-    assert len(matches) == min(max_tmpl_lines, number_of_lines) * min(number_of_lines, max_scene_lines) * 2
+    assert len(sorted_matches) == min(max_tmpl_lines, number_of_lines) * min(number_of_lines, max_scene_lines) * 2
     assert all_close(scene_transform[:2, :2], best_match_rotation)
     assert all_close(scene_transform[:2, 2], best_match_translation, 1e0 * 1 / scene_ratio)
 
     scene_transform = np.array([[1, 0, 0], [0, 1, 0]])
     scene = apply_transform(tmpl, scene_transform)
     featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
-    matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
-    matches = openfdcm.penalize(penalizer, matches, openfdcm.get_template_lengths([tmpl]))
+    raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+    penalized_matches = openfdcm.penalize(penalizer, raw_matches, openfdcm.get_template_lengths([tmpl]))
+    sorted_matches = openfdcm.sort_matches(penalized_matches)
 
-    best_match_rotation = matches[0].transform[:2, :2]
-    best_match_translation = matches[0].transform[:2, 2]
+    best_match_rotation = sorted_matches[0].transform[:2, :2]
+    best_match_translation = sorted_matches[0].transform[:2, 2]
 
-    assert len(matches) == max_tmpl_lines * max_scene_lines * 2
+    assert len(raw_matches) == max_tmpl_lines * max_scene_lines * 2
     assert all_close(scene_transform[:2, :2], best_match_rotation)
     assert all_close(scene_transform[:2, 2], best_match_translation, 1e0 * 1 / scene_ratio)
 

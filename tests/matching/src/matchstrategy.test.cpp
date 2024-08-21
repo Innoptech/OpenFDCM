@@ -53,7 +53,9 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         Mat23 scene_transform{{-1, 0, lineLength}, {0, -1, lineLength}};
         LineArray scene = transform(tmpl, scene_transform);
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
+        auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
+        std::sort(std::begin(matches), std::end(matches));
+        
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
@@ -68,7 +70,8 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         Mat23 scene_transform{{1, 0, 0}, {0, 1, 0}};
         LineArray scene = transform(tmpl, scene_transform);
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
+        auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
+        std::sort(std::begin(matches), std::end(matches));
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);
 
@@ -82,7 +85,8 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
     {
         LineArray scene(4, 0);
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
+        auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
+        std::sort(std::begin(matches), std::end(matches));
         REQUIRE(matches.empty());
     }
 
@@ -91,7 +95,8 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         std::vector<LineArray> templates;
         LineArray scene = tmpl;
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
+        auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
+        std::sort(std::begin(matches), std::end(matches));
         REQUIRE(matches.empty());
     }
 
@@ -100,7 +105,8 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         std::vector<LineArray> templates{LineArray(4, 0)};
         LineArray scene = tmpl;
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
-        std::vector<Match> matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
+        auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, templates, scene);
+        std::sort(std::begin(matches), std::end(matches));
         REQUIRE(matches.empty());
     }
 }

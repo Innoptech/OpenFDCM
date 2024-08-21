@@ -37,6 +37,8 @@ pip install -U git+https://github.com/Innoptech/OpenFDCM@main
 
 
 ### Template matching example
+For a complete example in python, see the [jupyter notebooks](notebooks).
+
 ```python
 import openfdcm
 
@@ -46,27 +48,51 @@ scene = # A 4xM array representing the M scene lines
 # Perform template matching
 max_tmpl_lines, max_scene_lines = 4, 4  # Combinatory search parameters.
 depth = 30              # The [0, pi] discretization.
-scene_padding = 1.5     # Pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
+scene_padding = 1.5     # A ratio to pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
 coeff = 5.0             # A weighting factor to enhance the angular cost vs distance cost in FDCM algorithm.
-num_threads = 4
+#num_threads = 4
 
-threadpool = openfdcm.ThreadPool(num_threads)
+threadpool = openfdcm.ThreadPool() # could pass num_threads here, but default is optimal
+featuremap_params = openfdcm.Dt3CpuParameters(depth, coeff, scene_padding)
 search_strategy = openfdcm.DefaultSearch(max_tmpl_lines, max_scene_lines)
-optimizer_strategy = openfdcm.DefaultOptimize(threadpool)
+optimizer_strategy = openfdcm.BatchOptimize(10, threadpool)
 matcher = openfdcm.DefaultMatch()
+penalizer = openfdcm.ExponentialPenalty(tau=1.5)
 
-featuremap_params = openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff, padding=scene_padding)
+# Build FDCm feature map and search
+start_time = time.time()
 featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
-matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, templates, scene)
+raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, templates, scene)
+penalized_matches = openfdcm.penalize(penalizer, raw_matches, openfdcm.get_template_lengths(templates))
+sorted_matches = openfdcm.sort_matches(penalized_matches)
+search_time = time.time() - start_time
 
-best_match = matches[0]                 # Best match (lower score) is first
+print(f"Template matching search completed in {search_time:.4f} seconds.")
+
+best_match = sorted_matches[0]                 # Best match (lower score) is first
 best_match_id = best_match.tmpl_idx
 best_matched_tmpl = templates[best_match_id]
 result_rotation = best_match.transform[0:2, 0:2]
 result_translation = best_match.transform[0:2, 2]
 ```
 
-For a complete example in python, see [templatematching.py](examples/templatematching.py).
+### 6-DOF estimation
+The illustration of the six degrees of freedom of a detected object. The blue arrows represent the degrees of freedom in the image plane. The set of blue and red arrows represents the degrees of freedom in space. In a), the rotation axes in SO(3) are illustrated, and in b), the translation axes in T(3).
+
+<img src="docs/static/pose_estimation_dof.png" alt="Pose estimation DOF visualization" width="45%" />
+
+Template matching on a single view provides 5 Degrees of Freedom (DOF) per detection, with the final missing DOF for full 6-DOF estimation requiring at least two views of the same scene, combined with calibrated extrinsic parameters.
+
+However, in the absence of a multiview camera, it is possible to estimate the 6th DOF if the following hypothesis is assumed: `The objects all touch a plane in at least one point and the plane pose is known`.
+
+Procedure (about 5 - 30ms per scene): 
+1. We sample templates of our object using a OpenGL renderer in a 2-DOF space (2 rotation). In the case of low-texture + specular reflections object, a multiflash renderer + depth edge detector is needed (might come in a future open-source library).
+2. We perform the scene imagery using a multiview camera (or a single view for 5-DOF + plane hypothesis).
+3. We perform template matching using `openfdcm` on each view.
+4. We triangulate and filter out the match candidates using a voting-scheme algorithm from the multiview detections (will come in a future Open-Source library).
+5. From the filtered matches, we combine the corresponding template information, the triangulated position and the image in-plane rotation (rotation in z) to retreive full 6-DOF pose.
+
+<img src="docs/static/pose_estimation_procedure.png" alt="Pose estimation procedure" width="45%" />
 
 
 # C++ usage

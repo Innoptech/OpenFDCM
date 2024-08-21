@@ -33,4 +33,4 @@ generated
 # Exclusions
 !tests/*
 !docs/static/*
-!examples/assets/*
+!notebooks/assets/*
