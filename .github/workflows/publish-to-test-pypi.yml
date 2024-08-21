@@ -49,6 +49,9 @@ jobs:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
     name: Bump version and tag on main
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     outputs:
       version_bumped: ${{ steps.cz.outputs.version }}
     steps:
