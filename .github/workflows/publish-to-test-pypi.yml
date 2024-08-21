@@ -11,9 +11,9 @@ on:
       - main
 
 jobs:
-  test:
+  build:
     if: "github.event_name == 'pull_request'"
-    name: Test on ${{ matrix.os }}
+    name: Build and Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -44,13 +44,12 @@ jobs:
         run: |
           python3 -m pip install numpy pytest
           python3 -m pytest
-          
+
   bump_version_and_tag:
     if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
     name: Bump version and tag on main
     runs-on: ubuntu-latest
     steps:
-          steps:
       - name: Check out
         uses: actions/checkout@v3
         with:
