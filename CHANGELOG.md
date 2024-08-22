@@ -1,3 +1,10 @@
+## v0.8.4 (2024-08-22)
+
+### Fix
+
+- upgrade packio dependency version
+- upgrade packio dependency version
+
 ## v0.8.3 (2024-08-21)
 
 ### Fix
