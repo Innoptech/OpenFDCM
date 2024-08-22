@@ -12,6 +12,9 @@
 OpenFDCM is a fast, lightweight implementation of the Fast Directional Chamfer Matching (FDCM) algorithm, built for precise template matching in low-texture scenes. It balances speed and accuracy for real-world computer vision tasks, using only classical computer vision techniques — no AI involved. This ensures a deterministic, repeatable method that adapts quickly to new, unseen objects, making it ideal for manufacturing industries where reliability, ease of diagnosis, and seamless integration are crucial. The library is highly extensible, utilizing modern C++ type erasure techniques to provide flexibility and maintainability.  
 
 Explore the [jupyter notebooks](notebooks) to try it out on Google Colab 🚀.
+"<a target=\"_blank\" href=\"https://colab.research.google.com/drive/1AtXjSrxsd42BVli3xbOR2b8pRkfyrb0m?usp=sharing\">\n",
+"<img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\">\n",
+"</a>"
 
 ![DT3 FDCM Maps](docs/static/object_pose_estimation_lines.png)
 ![DT3 FDCM Maps](docs/static/DT3Map.png)
