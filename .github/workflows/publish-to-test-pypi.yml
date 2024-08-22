@@ -1,0 +1,159 @@
+---
+name: Publish OpenFDCM
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    if: "github.event_name == 'pull_request'"
+    name: Build and Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Build C++ project and run C++ tests
+        run: |
+          mkdir build && cd build
+          cmake -DOPENFDCM_BUILD_TESTS=ON .. && cmake --build .
+          ctest .
+          cd ..
+
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install .
+
+      - name: Run tests
+        run: |
+          python3 -m pip install numpy pytest
+          python3 -m pytest
+
+  bump_version_and_tag:
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'bump:')"
+    name: Bump version and tag on main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ssh-key: "${{ secrets.COMMIT_KEY }}"
+      - name: Create bump and changelog
+        uses: commitizen-tools/commitizen-action@master
+        with:
+          push: false
+      - name: Push using ssh
+        run: |
+          git push origin main --tags
+
+  build_wheels:
+    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && startsWith(github.event.head_commit.message, 'bump:')"
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-13, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - name: Print the arch and system
+        run: |
+          python -c "import platform; print(f'System: {platform.system()}'); print(f'Architecture: {platform.architecture()[0]}')"
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.20.0
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
+
+  publish-to-testpypi:
+    name: Publish Python 🐍 distribution 📦 to TestPyPI
+    needs:
+      - build_wheels
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/openfdcm
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+      - name: Publish distribution 📦 to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-to-pypi:
+    name: Publish Python 🐍 distribution 📦 to PyPI
+    needs:
+      - publish-to-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/openfdcm
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Sign the Python 🐍 distribution 📦 with Sigstore and upload them to GitHub
+      Release
+    needs:
+      - publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+      - name: Sign the dists with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v2.1.1
+        with:
+          inputs: ./dist/*.whl
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: gh release create '${{ github.ref_name }}' --repo '${{ github.repository
+          }}' --notes ""
+      - name: Upload artifact signatures to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: gh release upload '${{ github.ref_name }}' dist/** --repo '${{
+          github.repository }}'
