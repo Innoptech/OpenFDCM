@@ -1,3 +1,56 @@
+## v0.9.0 (2024-08-22)
+
+### Feat
+
+- introduce compression with new version of packio
+- simplify serialization with packio
+- introduce batchoptimize
+
+### Fix
+
+- upgrade packio dependency version
+- upgrade packio dependency version
+- docs and trigger a build
+- types comparison
+- let the user sort the matches
+- introduce match penalization
+- BatchOptimize implicit conversion to OptimiseStrategy in python
+- introduce batchoptimize in matching header
+- pipy Classifiers
+- trigger build
+- deactivate windows wheels
+- windows wheels
+- windows wheels
+- windows wheels
+- windows wheels
+- windows wheels
+- remove build for python 3.13
+- remove build for python 3.13
+- Replace std::optional::value() with dereference for macOS pre-10.13 support
+- add OPENBLAS_NUM_THREADS=1 for numpy on python 3.13
+- conditionnal  CXX compiler options
+- warning C4715 on MSVC
+- sepcify conditionnal CMAKE_CXX_FLAGS_RELEASE
+- packed on msc
+- packed on msc
+- impl defined conversion
+- conditionnal define M_PI
+- add matching module index
+- conditionnal define M_PI
+- remove core/dt3.h
+- introduce feature map type erasure
+- introduce __init__.py in pytests
+- emplace_back construct_at issue with Mac OS
+- emplace_back construct_at issue with Mac OS
+- remove profiling
+- define non-standart C++ constants for MAC OS build
+- removing unused files
+
+### Refactor
+
+- matchStrategy -> matchstrategy
+- accelerate dt3 computation
+
 ## v0.8.4 (2024-08-22)
 
 ### Fix
