@@ -20,7 +20,7 @@ Explore the [jupyter notebooks](notebooks) to try it out on Google Colab 🚀.
 - ✅ **Removed OpenCV dependency**
 - ✅ **Python bindings available**
 - ✅ **Usage examples provided**
-- ⬜ **GPU support via OpenGL ES or OpenCL for multiple vendor compatibility**
+- ⬜ **GPU acceleration via OpenGL ES or OpenCL for multiple vendor compatibility**
 - ⬜ **Build Python wheels for Windows in ci**
 
 ---
