@@ -54,7 +54,7 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         LineArray scene = transform(tmpl, scene_transform);
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, scene_padding}, threadpool);
         auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
-        std::sort(std::begin(matches), std::end(matches));
+        sortMatches(matches);
         
         Mat22 best_match_rotation = matches[0].transform.block<2, 2>(0, 0);
         Point2 best_match_translation = matches[0].transform.block<2, 1>(0, 2);

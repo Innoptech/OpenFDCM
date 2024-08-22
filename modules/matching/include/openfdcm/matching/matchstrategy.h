@@ -45,6 +45,15 @@ namespace openfdcm::matching
 
     inline bool operator<(const Match& lhs, const Match& rhs) noexcept{ return lhs.score < rhs.score; }
 
+    inline void sortMatches(std::vector<Match>& matches) {
+        std::sort(std::begin(matches), std::end(matches));
+    }
+
+    inline void sortMatches(std::vector<Match>& matches, size_t maxNumCandidates) {
+        std::partial_sort(std::begin(matches), std::begin(matches) +
+        std::min(maxNumCandidates, matches.size()), std::end(matches));
+    }
+
     // ************************************************************************************************************
     // Concepts
     // ************************************************************************************************************
