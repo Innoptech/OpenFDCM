@@ -89,7 +89,7 @@ Template matching on a single view provides 5 Degrees of Freedom (DOF) per detec
 However, in the absence of a multiview camera, it is possible to estimate the 6th DOF if the following hypothesis is assumed: `The objects all touch a plane in at least one point and the plane pose is known`.
 
 Procedure (about 5 - 30ms per scene): 
-1. We sample templates of our object using a OpenGL renderer in a 2-DOF space (2 rotation). In the case of low-texture + specular reflections object, a multiflash renderer + depth edge detector is needed (might come in a future open-source library).
+1. We sample templates of our object using a OpenGL renderer in a 2-DOF space (2 rotation). In the case of low-texture + specular reflections object, a multiflash renderer + depth edge detector is needed (will come in a future open-source library).
 2. We perform the scene imagery using a multiview camera (or a single view for 5-DOF + plane hypothesis).
 3. We perform template matching using `openfdcm` on each view.
 4. We triangulate and filter out the match candidates using a voting-scheme algorithm from the multiview detections (will come in a future Open-Source library).
