@@ -80,7 +80,7 @@ result_translation = best_match.transform[0:2, 2]
 ## 6-DOF estimation
 The illustration of the six degrees of freedom of a detected object. The blue arrows represent the degrees of freedom in the image plane. The set of blue and red arrows represents the degrees of freedom in space. In a), the rotation axes in SO(3) are illustrated, and in b), the translation axes in T(3).
 
-<img src="docs/static/pose_estimation_dof.png" alt="Pose estimation DOF visualization" width="80%" />
+![Pose estimation DOF visualization](docs/static/pose_estimation_dof.png)
 
 Template matching on a single view provides 5 Degrees of Freedom (DOF) per detection, with the final missing DOF for full 6-DOF estimation requiring at least two views of the same scene, combined with calibrated extrinsic parameters.
 
