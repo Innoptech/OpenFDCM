@@ -23,7 +23,6 @@ SOFTWARE.
 */
 
 #include "openfdcm/matching/featuremaps/dt3cpu.h"
-#include "openfdcm/core/imgproc.h"
 
 namespace openfdcm::matching
 {
@@ -75,7 +74,7 @@ namespace openfdcm::matching
             return {extremum_coeffs(0,1), extremum_coeffs(1,1)};
         }
 
-        void propagateOrientation(detail::Dt3CpuMap<float> &featuremap, float coeff) noexcept {
+        void propagateOrientation(Dt3CpuMap<float> &featuremap, float coeff) noexcept {
             // Collect angles
             std::vector<float> angles;
             angles.reserve(featuremap.size());
@@ -107,15 +106,6 @@ namespace openfdcm::matching
             propagate(m, one_and_a_half_cycle_backward, -1);
         }
 
-        template<typename Vec>
-        inline Eigen::VectorXi vectorToEigenVector(const Vec &vec) noexcept {
-            Eigen::VectorXi eigenVec(vec.size());
-            for (Eigen::Index i{0}; i < static_cast<Eigen::Index>(vec.size()); ++i) {
-                eigenVec[i] = vec[static_cast<typename Vec::value_type>(i)];
-            }
-            return eigenVec;
-        }
-
         SceneShift getSceneCenteredTranslation(core::LineArray const &scene, float scene_padding) noexcept {
             auto const &[min_point, max_point] = core::minmaxPoint(scene);
             core::Point2 const distanceminmax = max_point - min_point;
@@ -125,64 +115,6 @@ namespace openfdcm::matching
             return {center_diff, (required_max.array() + 1.f).ceil().cast<size_t>()};
         }
     } // namespace detail
-
-    Dt3Cpu buildCpuFeaturemap(const core::LineArray &scene, const Dt3CpuParameters &params,
-                              const std::shared_ptr<BS::thread_pool> &pool_ptr) noexcept(false) {
-        if (scene.cols() == 0)
-            return {detail::Dt3CpuMap<float>{}, core::Point2{0,0}, core::Size{0,0}};
-
-        // Shift the scene so that all scene lines are greater than 0.
-        detail::SceneShift const& sceneShift = detail::getSceneCenteredTranslation(scene, params.padding);
-        const core::LineArray translatedScene = core::translate(scene, sceneShift.translation);
-
-        // Step 1: Define a number of linearly spaced angles
-        std::set<float> angles{};
-        for (size_t i{0}; i < params.depth; i++)
-            angles.insert(float(i) * M_PIf / float(params.depth) - M_PI_2f);
-
-        // Step 2: Classify lines
-        auto const& classified_lines = detail::classifyLines(angles, translatedScene);
-
-        // Step 3: Build featuremap with distance transform
-        detail::Dt3CpuMap<float> dt3map{};
-        std::mutex dt3map_mutex;  // Mutex to protect access to dt3map
-
-        auto func = [&](float angle) {
-            Eigen::VectorXi indices = detail::vectorToEigenVector(classified_lines.at(angle));
-            core::RawImage<float> distance_transformed =
-                    core::distanceTransform<float>(translatedScene(Eigen::all, indices), sceneShift.sceneSize);
-
-            // Lock the mutex to safely update dt3map
-            std::lock_guard<std::mutex> lock(dt3map_mutex);
-            dt3map[angle] = std::move(distance_transformed);
-        };
-
-        if (pool_ptr) {
-            // Submit tasks to the thread pool for each angle
-            std::vector<std::future<void>> futures;
-            for (const auto &angle : angles) {
-                futures.push_back(pool_ptr->submit_task([=] { func(angle); }));
-            }
-            // Wait for all tasks to complete
-            for (auto &fut : futures) {
-                fut.get();
-            }
-        } else {
-            // If no thread pool is available, run tasks sequentially
-            for (const auto &angle : angles) {
-                func(angle);
-            }
-        }
-
-        // Step 4: Propagate orientation
-        detail::propagateOrientation(dt3map, params.dt3Coeff);
-
-        // Step 5: Line integral
-        for (auto &[lineAngle, feature] : dt3map)
-            core::lineIntegral(feature, lineAngle);
-
-        return {dt3map, sceneShift.translation, sceneShift.sceneSize};
-    }
 
     template<>
     std::array<float, 2>
@@ -207,7 +139,7 @@ namespace openfdcm::matching
             scores[tmpl_idx].reserve(tmpl_translations.size());
 
             // Identify the line closest orientations, preallocate vector
-            std::vector<detail::Dt3CpuMap<float>::const_iterator> line_orientation_it(tmpl.cols());
+            std::vector<Dt3CpuMap<float>::const_iterator> line_orientation_it(tmpl.cols());
 
             for (long i = 0; i < tmpl.cols(); ++i)
             {

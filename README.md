@@ -51,12 +51,13 @@ scene = # A 4xM array representing the M scene lines
 # Perform template matching
 max_tmpl_lines, max_scene_lines = 4, 4  # Combinatory search parameters.
 depth = 30              # The [0, pi] discretization.
-scene_padding = 1.5     # A ratio to pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
 coeff = 5.0             # A weighting factor to enhance the angular cost vs distance cost in FDCM algorithm.
+scene_padding = 1.5     # A ratio to pad the scene images used in the FDCM algorithm, use if best match may appear on image boundaries.
+distance_type = openfdcm.distance.L2 # or openfdcm.distance.L2_SQUARED or openfdcm.distance.L1
 #num_threads = 4
 
 threadpool = openfdcm.ThreadPool() # could pass num_threads here, but default is optimal
-featuremap_params = openfdcm.Dt3CpuParameters(depth, coeff, scene_padding)
+featuremap_params = openfdcm.Dt3CpuParameters(depth, coeff, scene_padding, distance_type)
 search_strategy = openfdcm.DefaultSearch(max_tmpl_lines, max_scene_lines)
 optimizer_strategy = openfdcm.BatchOptimize(10, threadpool)
 matcher = openfdcm.DefaultMatch()

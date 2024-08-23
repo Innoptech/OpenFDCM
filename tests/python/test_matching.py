@@ -59,46 +59,49 @@ def run_test(scene_ratio, num_threads):
     scene_transform = np.array([[-1, 0, line_length], [0, -1, line_length]])
     scene = apply_transform(tmpl, scene_transform)
 
-    featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
-    raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
-    sorted_matches = openfdcm.sort_matches(raw_matches)
+    for distance in [openfdcm.distance.L2, openfdcm.distance.L1, openfdcm.distance.L2_SQUARED]:
+        featuremap_params = openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff,
+                                                      padding=2.2, distance=distance)
+        featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
+        raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+        sorted_matches = openfdcm.sort_matches(raw_matches)
 
-    best_match_transform = sorted_matches[0].transform
-    best_match_rotation = best_match_transform[:2, :2]
-    best_match_translation = best_match_transform[:2, 2]
+        best_match_transform = sorted_matches[0].transform
+        best_match_rotation = best_match_transform[:2, :2]
+        best_match_translation = best_match_transform[:2, 2]
 
-    assert len(sorted_matches) == min(max_tmpl_lines, number_of_lines) * min(number_of_lines, max_scene_lines) * 2
-    assert all_close(scene_transform[:2, :2], best_match_rotation)
-    assert all_close(scene_transform[:2, 2], best_match_translation, 1e0 * 1 / scene_ratio)
+        assert len(sorted_matches) == min(max_tmpl_lines, number_of_lines) * min(number_of_lines, max_scene_lines) * 2
+        assert all_close(scene_transform[:2, :2], best_match_rotation)
+        assert all_close(scene_transform[:2, 2], best_match_translation, 1e0 * 1 / scene_ratio)
 
-    scene_transform = np.array([[1, 0, 0], [0, 1, 0]])
-    scene = apply_transform(tmpl, scene_transform)
-    featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
-    raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
-    penalized_matches = openfdcm.penalize(penalizer, raw_matches, openfdcm.get_template_lengths([tmpl]))
-    sorted_matches = openfdcm.sort_matches(penalized_matches)
+        scene_transform = np.array([[1, 0, 0], [0, 1, 0]])
+        scene = apply_transform(tmpl, scene_transform)
+        featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
+        raw_matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+        penalized_matches = openfdcm.penalize(penalizer, raw_matches, openfdcm.get_template_lengths([tmpl]))
+        sorted_matches = openfdcm.sort_matches(penalized_matches)
 
-    best_match_rotation = sorted_matches[0].transform[:2, :2]
-    best_match_translation = sorted_matches[0].transform[:2, 2]
+        best_match_rotation = sorted_matches[0].transform[:2, :2]
+        best_match_translation = sorted_matches[0].transform[:2, 2]
 
-    assert len(raw_matches) == max_tmpl_lines * max_scene_lines * 2
-    assert all_close(scene_transform[:2, :2], best_match_rotation)
-    assert all_close(scene_transform[:2, 2], best_match_translation, 1e0 * 1 / scene_ratio)
+        assert len(raw_matches) == max_tmpl_lines * max_scene_lines * 2
+        assert all_close(scene_transform[:2, :2], best_match_rotation)
+        assert all_close(scene_transform[:2, 2], best_match_translation, 1e0 * 1 / scene_ratio)
 
-    scene = np.zeros((4, 0))
-    featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
-    matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
-    assert len(matches) == 0
+        scene = np.zeros((4, 0))
+        featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
+        matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [tmpl], scene)
+        assert len(matches) == 0
 
-    templates = []
-    scene = tmpl
-    featuremap = openfdcm.build_cpu_featuremap(scene, openfdcm.Dt3CpuParameters(depth=depth, dt3Coeff=coeff), threadpool)
-    matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [], scene)
-    assert len(matches) == 0
+        templates = []
+        scene = tmpl
+        featuremap = openfdcm.build_cpu_featuremap(scene, featuremap_params, threadpool)
+        matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, [], scene)
+        assert len(matches) == 0
 
-    templates = [np.zeros((4, 0))]
-    matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, templates, scene)
-    assert len(matches) == 0
+        templates = [np.zeros((4, 0))]
+        matches = openfdcm.search(matcher, search_strategy, optimizer_strategy, featuremap, templates, scene)
+        assert len(matches) == 0
 
 @pytest.mark.parametrize("scene_ratio", [1.0, 0.3])
 @pytest.mark.parametrize("num_threads", [4])

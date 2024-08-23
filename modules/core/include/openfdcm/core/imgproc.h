@@ -84,12 +84,12 @@ namespace openfdcm::core
     }
 
     /**
-     * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions
+     * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions for L2_SQUARED distance
      * @tparam Derived The type of the image
      * @param img The resulting distance transform as an image
      */
     template<typename Derived>
-    static inline void _distanceTransformColumnPass(Eigen::DenseBase<Derived>& img) noexcept {
+    static inline void _distanceTransformColumnPassL2(Eigen::DenseBase<Derived>& img) noexcept {
         using T = typename Derived::Scalar;
         using IdxArray = Eigen::Array<Eigen::Index, 1, -1>;
         IdxArray const square_idx = IdxArray::LinSpaced(img.rows(), 0, img.rows() - 1).square();
@@ -129,29 +129,68 @@ namespace openfdcm::core
         }
     }
 
-
     /**
-     * @brief Perform the distance transform given a set of lines
-     * Use the algorithm Distance Transforms of Sampled Functions
-     * @tparam T The required image type
-     * @param linearray The given set of lines
-     * @param size The required size of the image
-     * @return The distance transform as an image
+     * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions
+     * @tparam Derived The type of the image
+     * @param img The resulting distance transform as an image
      */
-    template<typename T>
+    template<typename Derived>
+    static inline void _distanceTransformColumnPassL1(Eigen::DenseBase<Derived>& img) noexcept {
+        for (Eigen::Index q{1}; q < img.cols(); ++q) {
+            img.col(q) = img.col(q).min(img.col(q-1)+1);
+        }
+        // Backward pass
+        for (Eigen::Index q{img.cols()-2}; q >=0 ; --q) {
+            img.col(q) = img.col(q).min(img.col(q+1)+1);
+        }
+    }
+
+    enum class Distance {L2=0, L2_SQUARED, L1 };
+    /**
+     * @brief Perform the distance transform for a given set of lines.
+     *
+     * This function computes the distance transform of an image based on the provided line array
+     * and image size. It supports different distance metrics (L1, L2, and L2 squared) depending on
+     * the template parameter `D`. The algorithm is based on the "Distance Transforms of Sampled Functions".
+     *
+     * - **L1 Distance**: Computes the Manhattan distance.
+     * - **L2 Distance**: Computes the Euclidean distance.
+     * - **L2 Squared Distance**: Computes the square of the Euclidean distance.
+     *
+     * Depending on the chosen distance type, different algorithms are applied in both the column
+     * and row passes.
+     *
+     * @tparam T The type of the image (e.g., `float`, `double`), which must support infinity.
+     * @tparam D The type of distance metric to use (default is `Distance::L2`).
+     * @param linearray The given set of lines for which the distance transform is to be computed.
+     * @param size The size of the resulting image.
+     * @return The resulting image with the distance transform applied, where each pixel holds the distance value.
+     */
+    template<typename T, Distance D=Distance::L2>
     inline RawImage<T> distanceTransform(LineArray const& linearray, Size const& size) noexcept {
         static_assert(std::numeric_limits<T>::has_infinity);
 
         // Initialize the image with max values
         RawImage<T> colmaj_img = RawImage<T>::Constant(size.y(), size.x(), std::numeric_limits<T>::max());
         drawLines(colmaj_img, linearray, 0);
+        
         // Perform column pass
-        _distanceTransformColumnPass(colmaj_img);
+        if constexpr (D == Distance::L1) {
+            _distanceTransformColumnPassL1(colmaj_img);
+            // Perform row pass (using the transpose of the column pass)
+            colmaj_img = colmaj_img.transpose().eval(); // transpose require eval to be actually computed
+            _distanceTransformColumnPassL1(colmaj_img);
+            return colmaj_img.transpose();
+        }
+
+        _distanceTransformColumnPassL2(colmaj_img);
         // Perform row pass (using the transpose of the column pass)
-        colmaj_img = colmaj_img.transpose().eval();
-        _distanceTransformColumnPass(colmaj_img);
-        // Transpose back and apply square root
-        return colmaj_img.transpose().sqrt().eval();
+        colmaj_img = colmaj_img.transpose().eval(); // transpose require eval to be actually computed
+        _distanceTransformColumnPassL2(colmaj_img);
+
+        if constexpr (D == Distance::L2)
+            return colmaj_img.transpose().sqrt();
+        return colmaj_img.transpose();
     }
 } //namespace openfdcm
 #endif //OPENFDCM_IMGPROC_H

@@ -26,9 +26,13 @@ SOFTWARE.
 #include "openfdcm/core/imgproc.h"
 #include "test-utils/utils.h"
 
+
+
+#include "iostream"
+
 using namespace openfdcm::core;
 
-TEST_CASE( "rasterizeLine for specific angle" )
+TEST_CASE( "rasterizeLine for specific angle", "[openfdcm::core]")
 {
     const Line line{8, 8, 11, 8};
     const Point2 rot_point{8, 8};
@@ -79,7 +83,7 @@ TEST_CASE( "rasterizeLine for specific angle" )
     }
 }
 
-TEST_CASE( "rasterizeLine check for first and last points" )
+TEST_CASE( "rasterizeLine check for first and last points", "[openfdcm::core]")
 {
     SECTION("Rasterize line shorter than 0.5")
     {
@@ -90,7 +94,7 @@ TEST_CASE( "rasterizeLine check for first and last points" )
     }
 }
 
-TEST_CASE("drawLines")
+TEST_CASE("drawLines", "[openfdcm::core]")
 {
     SECTION("Draw line with clipped line (points out of bound)")
     {
@@ -139,7 +143,7 @@ TEST_CASE("drawLines")
     }
 }
 
-TEST_CASE( "lineIntegral" )
+TEST_CASE( "lineIntegral", "[openfdcm::core]")
     {
     SECTION("Various orientations")
     {
@@ -159,48 +163,51 @@ TEST_CASE( "lineIntegral" )
     }
 }
 
-TEST_CASE("distanceTransform")
-{
-    SECTION("Test for validity")
-    {
-        const Size featuresize{5, 10};
-        const LineArray linearray{
-                {0},
-                {0},
-                {0},
-                {9}
-        };
-        RawImage<float> const dist_trans = distanceTransform<float>(linearray, featuresize);
+// Helper function template for testing different distance types
+template <Distance DistanceType>
+void testDistanceTransform(const Eigen::Array<float,1,4>& expected_single_point,
+                           const Eigen::Array<float,1,8>& expected_line) {
 
+    SECTION("Test for validity") {
+        const Size featuresize{5, 10};
+        RawImage<float> const dist_trans =
+                distanceTransform<float, DistanceType>(LineArray{{0}, {0}, {0}, {9}}, featuresize);
         REQUIRE(dist_trans.col(0).sum() == 0);
-        for (auto const& row : dist_trans.rowwise())
-            REQUIRE(relativelyEqual(row(4), 4.f, 0.f, 1e-6f));
+        for (Eigen::Index i{0}; i < static_cast<Eigen::Index>(featuresize.x()); ++i) {
+            REQUIRE(dist_trans.col(i).isApproxToConstant(std::pow(i, DistanceType == Distance::L2_SQUARED ? 2 : 1)));
+        }
         REQUIRE(relativelyEqual(dist_trans.col(1).sum(), (float)dist_trans.rows(), 0.f, 1e-5f));
     }
-    SECTION("Test for single point")
-    {
-        const Size featuresize{4,2};
-        const LineArray linearray{
-                {2},
-                {0},
-                {2},
-                {0}
-        };
-        RawImage<float> const& dist_trans = distanceTransform<float>(linearray, featuresize);
-        REQUIRE(allClose(dist_trans.row(0), Eigen::Array<float,1,4>{2,1,0,1}, 0.f, 1e-5f));
+
+    SECTION("Test for line") {
+        RawImage<float> const line_dist_trans =
+                distanceTransform<float, DistanceType>(LineArray{{2}, {0}, {5}, {0}}, Size{8,2});
+        REQUIRE(allClose(line_dist_trans.row(0), expected_line, 0.f, 1e-5f));
     }
-    SECTION("Test for line")
-    {
-        const Size featuresize{8,2};
-        const LineArray linearray{
-                {2},
-                {0},
-                {5},
-                {0}
-        };
-        RawImage<float> const& dist_trans = distanceTransform<float>(linearray, featuresize);
-        REQUIRE(allClose(dist_trans.row(0), Eigen::Array<float,1,8>{2,1,0,0,0,0,1,2}, 0.f, 1e-5f));
+
+    SECTION("Test for single point") {
+        RawImage<float> const single_pt_dist_trans =
+                distanceTransform<float, DistanceType>(LineArray{{2}, {0}, {2}, {0}}, Size{4,1});
+        std::cout << single_pt_dist_trans <<"\n";
+        REQUIRE(allClose(single_pt_dist_trans.row(0), expected_single_point, 0.f, 1e-5f));
     }
 }
 
+// Test cases using the helper function
+TEST_CASE("distanceTransform L2", "[openfdcm::core]") {
+    Eigen::Array<float,1,4> expected_single_point{2, 1, 0, 1};
+    Eigen::Array<float,1,8> expected_line{2, 1, 0, 0, 0, 0, 1, 2};
+    testDistanceTransform<Distance::L2>(expected_single_point, expected_line);
+}
 
+TEST_CASE("distanceTransform L1", "[openfdcm::core]") {
+    Eigen::Array<float,1,4> expected_single_point{2, 1, 0, 1};
+    Eigen::Array<float,1,8> expected_line{2, 1, 0, 0, 0, 0, 1, 2};
+    testDistanceTransform<Distance::L1>(expected_single_point, expected_line);
+}
+
+TEST_CASE("distanceTransform L2_SQUARED", "[openfdcm::core]") {
+    Eigen::Array<float,1,4> expected_single_point{4, 1, 0, 1};
+    Eigen::Array<float,1,8> expected_line{4, 1, 0, 0, 0, 0, 1, 4};
+    testDistanceTransform<Distance::L2_SQUARED>(expected_single_point, expected_line);
+}

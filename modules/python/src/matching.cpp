@@ -48,6 +48,17 @@ using namespace pybind11::literals;
 using namespace openfdcm;
 using namespace openfdcm::matching;
 
+class PyDt3CpuParameters : public Dt3CpuParameters
+{
+public:
+    core::Distance distance;
+
+    explicit PyDt3CpuParameters(size_t depth=30, float dt3Coeff=5.f, float padding=2.2f,
+                                core::Distance _distance=core::Distance::L2)
+    : Dt3CpuParameters{depth, dt3Coeff, padding}, distance{_distance}
+    {}
+};
+
 void matching(py::module_ &m) {
     // ---------------------------------------------------------
     // Featuremaps
@@ -59,7 +70,7 @@ void matching(py::module_ &m) {
             });
 
     py::class_<Dt3Cpu>(m, "Dt3Cpu")
-            .def(py::init<detail::Dt3CpuMap<float>, core::Point2, core::Size>())
+            .def(py::init<Dt3CpuMap<float>, core::Point2, core::Size>())
             .def("get_scene_translation", &Dt3Cpu::getSceneTranslation)
             .def("get_feature_size", &Dt3Cpu::getFeatureSize)
             .def("get_dt3_map", &Dt3Cpu::getDt3Map)
@@ -89,19 +100,32 @@ void matching(py::module_ &m) {
                        ", tasks running=" + std::to_string(tp.get_tasks_running()) + ">";
             });
 
-    py::class_<Dt3CpuParameters>(m, "Dt3CpuParameters")
-            .def(py::init<size_t, float, float>(), "depth"_a=30, "dt3Coeff"_a=5.f, "padding"_a=2.2f)
-            .def_readwrite("depth", &Dt3CpuParameters::depth)
-            .def_readwrite("dt3_coeff", &Dt3CpuParameters::dt3Coeff)
-            .def_readwrite("padding", &Dt3CpuParameters::padding)
-            .def("__repr__", [](const Dt3CpuParameters &p) {
-                return "<Dt3CpuParameters: depth=" + std::to_string(p.depth) +
+    py::class_<PyDt3CpuParameters>(m, "Dt3CpuParameters")
+            .def(py::init<size_t, float, float, core::Distance>(),
+                    "depth"_a=30, "dt3Coeff"_a=5.f, "padding"_a=2.2f, "distance"_a=core::Distance::L2)
+            .def_readwrite("depth", &PyDt3CpuParameters::depth)
+            .def_readwrite("dt3_coeff", &PyDt3CpuParameters::dt3Coeff)
+            .def_readwrite("padding", &PyDt3CpuParameters::padding)
+            .def_readwrite("distance", &PyDt3CpuParameters::distance)
+            .def("__repr__", [](const PyDt3CpuParameters &p) {
+                return "<PyDt3CpuParameters: depth=" + std::to_string(p.depth) +
                        ", dt3_coeff=" + std::to_string(p.dt3Coeff) +
                        ", padding=" + std::to_string(p.padding) + ">";
             });
 
-    m.def("build_cpu_featuremap", &buildCpuFeaturemap,
-          "scene"_a, "params"_a=Dt3CpuParameters{}, "pool"_a=std::make_shared<BS::thread_pool>(),
+    m.def("build_cpu_featuremap",
+          [](const core::LineArray &scene, const PyDt3CpuParameters &py_params,
+              const std::shared_ptr<BS::thread_pool> &pool_ptr)
+          {
+              auto params_ptr = static_cast<const Dt3CpuParameters*>(&py_params);
+              if (py_params.distance == core::Distance::L2) {
+                  return buildCpuFeaturemap<core::Distance::L2>(scene, *params_ptr, pool_ptr);
+              } else if (py_params.distance == core::Distance::L2_SQUARED) {
+                  return buildCpuFeaturemap<core::Distance::L2_SQUARED>(scene, *params_ptr, pool_ptr);
+              } //else if (params.distance == core::Distance::L1) {
+              return buildCpuFeaturemap<core::Distance::L1>(scene, *params_ptr, pool_ptr);
+          },
+          "scene"_a, "params"_a=PyDt3CpuParameters{}, "pool"_a=std::make_shared<BS::thread_pool>(),
           "Builds the Dt3Cpu featuremap given a scene, parameters, and an optional thread pool."
     );
 
@@ -281,7 +305,4 @@ void matching(py::module_ &m) {
                   [](const Match& lhs, const Match& rhs) { return lhs.score < rhs.score; });
         return matches;
     }, "matches"_a, "Sort the matches by score, with the best score (lowest) first.");
-
-
-
 }

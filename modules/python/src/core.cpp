@@ -27,6 +27,7 @@ SOFTWARE.
 #include <pybind11/eigen.h>
 
 #include "openfdcm/core/serialization.h"
+#include "openfdcm/core/imgproc.h"
 
 //-------------------------------------------------------------------------------
 // PYTHON BINDINGS
@@ -39,5 +40,12 @@ void core(py::module_ &m)
 {
     m.def("write", &core::write, "filepath"_a, "linearray"_a);
     m.def("read", &core::read, "filepath"_a);
+
+    // Define the Distance enum
+    pybind11::enum_<core::Distance>(m, "distance")
+            .value("L2", core::Distance::L2)
+            .value("L2_SQUARED", core::Distance::L2_SQUARED)
+            .value("L1", core::Distance::L1)
+            .export_values();
 }
 
