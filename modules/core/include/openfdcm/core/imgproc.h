@@ -30,11 +30,11 @@ SOFTWARE.
 
 namespace openfdcm::core
 {
-/**
- * @brief Perform the line integral of a greyscale image
- * @param img The input-output image
- * @param lineAngle The integration lineAngle
- */
+    /**
+     * @brief Perform the line integral of a greyscale image
+     * @param img The input-output image
+     * @param lineAngle The integration lineAngle
+     */
     template<typename Derived>
     inline void lineIntegral(Eigen::DenseBase<Derived>& img, float const& lineAngle) noexcept
     {
@@ -48,7 +48,7 @@ namespace openfdcm::core
             p0.y() += img.rows() - 1;
 
         if (std::abs(rastvec.x()) == 1)
-        {
+        {   // Colwise
             Eigen::Index previous_p1x{p0.x()};
             for (Eigen::Index i{1}; i < img.cols(); ++i)
             {
@@ -64,7 +64,7 @@ namespace openfdcm::core
             }
         }
         else if (std::abs(rastvec.y()) == 1)
-        {
+        {   // Rowwise
             Eigen::Array<T, -1, -1, Eigen::RowMajor> rowmaj_img = img;
             Eigen::Index previous_p1y{p0.y()};
             for (Eigen::Index i{1}; i < img.rows(); ++i)
@@ -172,8 +172,9 @@ namespace openfdcm::core
 
         // Initialize the image with max values
         RawImage<T> colmaj_img = RawImage<T>::Constant(size.y(), size.x(), std::numeric_limits<T>::max());
+        if (linearray.cols() == 0) return colmaj_img;
         drawLines(colmaj_img, linearray, 0);
-        
+
         // Perform column pass
         if constexpr (D == Distance::L1) {
             _distanceTransformColumnPassL1(colmaj_img);

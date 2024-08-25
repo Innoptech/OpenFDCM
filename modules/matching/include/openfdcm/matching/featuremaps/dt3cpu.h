@@ -24,10 +24,9 @@ SOFTWARE.
 
 #ifndef OPENFDCM_FEATUREMAPS_DT3CPU_H
 #define OPENFDCM_FEATUREMAPS_DT3CPU_H
-#include <map>
 #include "openfdcm/matching/featuremap.h"
 #include "openfdcm/core/imgproc.h"
-#include "BS_thread_pool.hpp"
+#include <BS_thread_pool.hpp>
 
 namespace openfdcm::matching {
 
@@ -41,12 +40,16 @@ namespace openfdcm::matching {
         {};
     };
 
-    template<typename T> using Dt3CpuMap = std::map<const float, core::RawImage<T>>;
+
+    template<typename T>
+    struct Dt3CpuMap
+    {
+        std::vector<core::RawImage<T>> features;
+        std::vector<float> sortedAngles;
+    };
 
     class Dt3Cpu : public FeatureMapInstance
     {
-        template<typename T> using Dt3CpuMap = std::map<const float, core::RawImage<T>>;
-
         Dt3CpuMap<float> dt3map_;
         core::Point2 sceneTranslation_;
         core::Size featureSize_;
@@ -83,54 +86,40 @@ namespace openfdcm::matching {
                           core::Point2 const& extraTranslation=core::Point2{0.f,0.f});
 
         /**
-         * @brief Get the best match in orientation of the reference line given the featuremap
-         * @tparam T The tan values type
-         * @tparam U The mapped value
-         * @param featuremap The given featuremap
+         * @brief Get the index of the best match in orientation of the reference line given the featuremap
+         * @param sortedAngles The given featuremap (must be sorted)
          * @param line The reference line
-         * @return A tuple containing the lineAngle and the corresponding feature
+         * @return The index of the closest angle
          */
-        template <class Map>
-        inline auto closestOrientation(Map& map, core::Line const& line) noexcept
-        {
-            auto line_angle = core::getAngle(line)(0,0);
-            auto itlow = map.upper_bound(line_angle);
-            if (itlow != std::end(map) and itlow != std::begin(map)) {
-                const auto upper_bound_diff = std::abs(line_angle - itlow->first);
-                itlow--;
-                const auto lower_bound_diff = std::abs(line_angle - itlow->first);
-                if (lower_bound_diff < upper_bound_diff)
-                    return itlow;
-                itlow++;
-                return itlow;
-            }
-            itlow = std::end(map);
-            itlow--;
-            const float angle1 = line_angle - std::begin(map)->first;
-            const float angle2 = line_angle - itlow->first;
-            if (std::min(angle1, std::abs(angle1 - M_PIf)) < std::min(angle2, std::abs(angle2 - M_PIf)))
-                return std::begin(map);
-            return itlow;
-        }
+        size_t closestOrientationIndex(std::vector<float> const& sortedAngles, core::Line const& line);
 
         /**
-         * @brief Classify each line given a restricted set of angles
-         * @tparam T The feature type
-         * @param angle_set The set of angles
-         * @param linearray The array of lines
-         * @return A map associating each angle with a vector of indices
-         */
-        template<typename T> inline std::map<T, std::vector<Eigen::Index>>
-        classifyLines(std::set<T> const& angle_set, core::LineArray const& linearray) noexcept(false)
+        * @brief Classify each line given a restricted set of angles
+        * @tparam T The feature type
+        * @param sortedAngles The set of sorted angles
+        * @param linearray The array of lines
+        * @return A map associating each angle with a vector of indices
+        */
+        inline std::vector<std::vector<Eigen::Index>> classifyLines(std::vector<float> const& sortedAngles,
+                                                                    core::LineArray const& linearray) noexcept(false)
         {
-            std::map<T, std::vector<Eigen::Index>> classified{};
-            for(T const& angle : angle_set) classified[angle] = {};
-
-            for (Eigen::Index i{0}; i<linearray.cols(); ++i) {
-                auto const& it = closestOrientation(classified, core::getLine(linearray,i));
-                it->second.emplace_back(i);
+            if(linearray.cols() == 0)
+                return {};
+            if (sortedAngles.empty()) {
+                throw std::runtime_error{"Error in closestOrientationIndex: set of sortedAngles is empty"};
             }
-            return classified;
+
+            if (!std::is_sorted(std::begin(sortedAngles), std::end(sortedAngles))) {
+                throw std::runtime_error{"Error in closestOrientationIndex: set of sortedAngles is not sorted"};
+            }
+
+            // A vector of template line idx for each angle
+            std::vector<std::vector<Eigen::Index>> tmplLineIdx(sortedAngles.size());
+            for (Eigen::Index i{0}; i<linearray.cols(); ++i) {
+                auto const& angleIdx = closestOrientationIndex(sortedAngles, core::getLine(linearray,i));
+                tmplLineIdx[angleIdx].emplace_back(i);
+            }
+            return tmplLineIdx;
         }
 
         /**
@@ -185,32 +174,34 @@ namespace openfdcm::matching {
         const core::LineArray translatedScene = core::translate(scene, sceneShift.translation);
 
         // Step 1: Define a number of linearly spaced angles
-        std::set<float> angles{};
-        for (size_t i{0}; i < params.depth; i++)
-            angles.insert(float(i) * M_PIf / float(params.depth) - M_PI_2f);
+        std::vector<float> sortedAngles{}; sortedAngles.reserve(params.depth);
+        for (size_t i{0}; i < params.depth; i++) {
+            sortedAngles.emplace_back(float(i) * M_PIf / float(params.depth) - M_PI_2f);
+        }
+            
+        assert(std::is_sorted(std::begin(sortedAngles), std::end(sortedAngles)));
 
         // Step 2: Classify lines
-        auto const& classified_lines = detail::classifyLines(angles, translatedScene);
+        auto const& indices = detail::classifyLines(sortedAngles, translatedScene);
 
         // Step 3: Build featuremap with distance transform
-        Dt3CpuMap<float> dt3map{};
+        Dt3CpuMap<float> dt3map{std::vector<core::RawImage<float>>(sortedAngles.size()), sortedAngles};
         std::mutex dt3map_mutex;  // Mutex to protect access to dt3map
 
-        auto func = [&](float angle) {
-            Eigen::VectorXi indices = detail::vectorToEigenVector(classified_lines.at(angle));
+        auto func = [&](size_t angleIdx) {
             core::RawImage<float> distance_transformed =
-                    core::distanceTransform<float, D>(translatedScene(Eigen::all, indices), sceneShift.sceneSize);
+                    core::distanceTransform<float, D>(translatedScene(Eigen::all, indices.at(angleIdx)), sceneShift.sceneSize);
 
             // Lock the mutex to safely update dt3map
             std::lock_guard<std::mutex> lock(dt3map_mutex);
-            dt3map[angle] = std::move(distance_transformed);
+            dt3map.features[angleIdx] = std::move(distance_transformed);
         };
 
         if (pool_ptr) {
             // Submit tasks to the thread pool for each angle
             std::vector<std::future<void>> futures;
-            for (const auto &angle : angles) {
-                futures.push_back(pool_ptr->submit_task([=] { func(angle); }));
+            for (size_t angleIdx{0}; angleIdx < sortedAngles.size(); ++angleIdx) {
+                futures.push_back(pool_ptr->submit_task([=] { func(angleIdx); }));
             }
             // Wait for all tasks to complete
             for (auto &fut : futures) {
@@ -218,8 +209,8 @@ namespace openfdcm::matching {
             }
         } else {
             // If no thread pool is available, run tasks sequentially
-            for (const auto &angle : angles) {
-                func(angle);
+            for (size_t angleIdx{0}; angleIdx < sortedAngles.size(); ++angleIdx) {
+                func(angleIdx);
             }
         }
 
@@ -227,8 +218,10 @@ namespace openfdcm::matching {
         detail::propagateOrientation(dt3map, params.dt3Coeff);
 
         // Step 5: Line integral
-        for (auto &[lineAngle, feature] : dt3map)
-            core::lineIntegral(feature, lineAngle);
+        for (size_t angleIdx{0}; angleIdx < dt3map.sortedAngles.size(); ++angleIdx)
+        {
+            core::lineIntegral(dt3map.features[angleIdx], dt3map.sortedAngles[angleIdx]);
+        }
 
         return {dt3map, sceneShift.translation, sceneShift.sceneSize};
     }

@@ -21,7 +21,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-
 #include "openfdcm/matching/featuremaps/dt3cpu.h"
 
 namespace openfdcm::matching
@@ -74,16 +73,39 @@ namespace openfdcm::matching
             return {extremum_coeffs(0,1), extremum_coeffs(1,1)};
         }
 
-        void propagateOrientation(Dt3CpuMap<float> &featuremap, float coeff) noexcept {
-            // Collect angles
-            std::vector<float> angles;
-            angles.reserve(featuremap.size());
-            for (const auto &item: featuremap) {
-                angles.push_back(item.first);
+        size_t closestOrientationIndex(std::vector<float> const& sortedAngles, core::Line const& line)
+        {
+            assert(!sortedAngles.empty());
+
+            // Get the angle of the line
+            float line_angle = core::getAngle(line)(0, 0);
+
+            // Perform binary search to find the first element that is >= line_angle
+            auto itlow = std::upper_bound(std::begin(sortedAngles), std::end(sortedAngles), line_angle);
+
+            if (itlow != std::end(sortedAngles) and itlow != std::begin(sortedAngles)) {
+                const auto upper_bound_diff = std::abs(line_angle - *itlow);
+                itlow--;
+                const auto lower_bound_diff = std::abs(line_angle - *itlow);
+                if (lower_bound_diff < upper_bound_diff)
+                    return std::distance(std::begin(sortedAngles), itlow);;
+                itlow++;
+                return std::distance(std::begin(sortedAngles), itlow);;
             }
+            itlow = std::end(sortedAngles);
+            itlow--;
+            const float angle1 = line_angle - *std::begin(sortedAngles);
+            const float angle2 = line_angle - *itlow;
+            if (std::min(angle1, std::abs(angle1 - M_PIf)) < std::min(angle2, std::abs(angle2 - M_PIf)))
+                return 0;
+            return sortedAngles.size() - 1;
+        }
+
+        void propagateOrientation(Dt3CpuMap<float> &featuremap, float coeff) noexcept {
+            assert(featuremap.sortedAngles.size() == featuremap.features.size());
 
             // Precompute constants
-            const int m = static_cast<int>(featuremap.size());
+            const int m = static_cast<int>(featuremap.sortedAngles.size());
             const int one_and_a_half_cycle_forward = static_cast<int>(std::ceil(1.5 * m));
             const int one_and_a_half_cycle_backward = -static_cast<int>(std::floor(1.5 * m));
 
@@ -92,13 +114,13 @@ namespace openfdcm::matching
                     int c1 = (m + ((c - step) % m)) % m;
                     int c2 = (m + (c % m)) % m;
 
-                    const float angle1 = angles[c1];
-                    const float angle2 = angles[c2];
+                    const float angle1 = featuremap.sortedAngles[c1];
+                    const float angle2 = featuremap.sortedAngles[c2];
 
                     const float h = std::abs(angle1 - angle2);
                     const float min_h = std::min(h, std::abs(h - M_PIf));
 
-                    featuremap[angle2] = featuremap[angle2].min(featuremap[angle1] + coeff * min_h);
+                    featuremap.features[c2] = featuremap.features[c2].min(featuremap.features[c1] + coeff * min_h);
                 }
             };
 
@@ -139,12 +161,11 @@ namespace openfdcm::matching
             scores[tmpl_idx].reserve(tmpl_translations.size());
 
             // Identify the line closest orientations, preallocate vector
-            std::vector<Dt3CpuMap<float>::const_iterator> line_orientation_it(tmpl.cols());
-
+            std::vector<size_t> lineOrientationIdx{}; lineOrientationIdx.reserve(tmpl.cols());
             for (long i = 0; i < tmpl.cols(); ++i)
             {
                 const core::Line& line = core::getLine(tmpl, i);
-                line_orientation_it[i] = detail::closestOrientation(dt3map, line);
+                lineOrientationIdx[i] = detail::closestOrientationIndex(dt3map.sortedAngles, line);
             }
 
             // Translate the template on the transformed scene
@@ -158,14 +179,13 @@ namespace openfdcm::matching
                 for (long i = 0; i < translatedTmpl.cols(); ++i)
                 {
                     const core::Line& line = core::getLine(translatedTmpl, i);
-                    const auto& it = line_orientation_it[i];
+                    const auto& feature = dt3map.features[lineOrientationIdx[i]];
 
                     // Avoid casting inside the loop
                     point1 = core::p1(line).template cast<int>();
                     point2 = core::p2(line).template cast<int>();
 
                     // Access feature data directly
-                    const auto& feature = it->second;
                     float lookup_p1 = feature(point1.y(), point1.x());
                     float lookup_p2 = feature(point2.y(), point2.x());
 
