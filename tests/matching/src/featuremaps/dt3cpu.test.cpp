@@ -276,7 +276,7 @@ TEST_CASE("Dt3Cpu")
         RawImage<float> const& img = distanceTransform<float>(linearray, featuresize);
 
         featuremap.features[0] = img;
-        propagateOrientation(featuremap, coeff);
+        propagateOrientation(featuremap.features, featuremap.sortedAngles, coeff);
 
         auto feature1 = featuremap.features[0];
         auto lineAngle1 = featuremap.sortedAngles[0];

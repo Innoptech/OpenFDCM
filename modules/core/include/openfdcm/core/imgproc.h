@@ -38,7 +38,6 @@ namespace openfdcm::core
     template<typename Derived>
     inline void lineIntegral(Eigen::DenseBase<Derived>& img, float  lineAngle) noexcept
     {
-        using T = typename Derived::Scalar;
         Point2 rastvec = rasterizeVector(Point2{std::cos(lineAngle), std::sin(lineAngle)});
 
         bool transposed{false};
@@ -181,6 +180,41 @@ namespace openfdcm::core
         if constexpr (D == Distance::L2)
             return colmaj_img.transpose().sqrt();
         return colmaj_img.transpose();
+    }
+
+    /**
+    * @brief Propagate the distance transform in the orientation (feature) space
+    * @param featuremap The feature map as a vector
+    * @param angles The angle for each feature map as a vector
+    * @param coeff The propagation coefficient
+    */
+    template<typename T>
+    void propagateOrientation(std::vector<RawImage<T>>& featuremap, std::vector<float>& angles, float coeff) noexcept
+    {
+        assert(featuremap.size() == angles.size());
+
+        // Precompute constants
+        const int m = static_cast<int>(angles.size());
+        const int one_and_a_half_cycle_forward = static_cast<int>(std::ceil(1.5 * m));
+        const int one_and_a_half_cycle_backward = -static_cast<int>(std::floor(1.5 * m));
+
+        auto propagate = [&](int start, int end, int step) {
+            for (int c = start; c != end; c += step) {
+                int c1 = (m + ((c - step) % m)) % m;
+                int c2 = (m + (c % m)) % m;
+
+                const float angle1 = angles[c1];
+                const float angle2 = angles[c2];
+
+                const float h = std::abs(angle1 - angle2);
+                const float min_h = std::min(h, std::abs(h - M_PIf));
+
+                featuremap[c2] = featuremap[c2].min(featuremap[c1] + coeff * min_h);
+            }
+        };
+
+        propagate(0, one_and_a_half_cycle_forward, 1);
+        propagate(m, one_and_a_half_cycle_backward, -1);
     }
 } //namespace openfdcm
 #endif //OPENFDCM_IMGPROC_H
