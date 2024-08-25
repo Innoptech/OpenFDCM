@@ -8,7 +8,7 @@
 
 namespace openfdcm::core::cuda {
 
-    static constexpr int Dynamic = -1;
+    static constexpr long Dynamic = -1;
 
     template <typename DerivedCuda, typename DerivedCpu>
     __host__ inline void copyToCuda(DerivedCuda& cudaArray, DerivedCpu const& cpuArray);
@@ -43,14 +43,14 @@ namespace openfdcm::core::cuda {
 
         // Common API to access array size
         __host__ __device__
-        int size() const noexcept { return derived().size(); }
+        long size() const noexcept { return derived().size(); }
 
         // Accessor: Get value at (row, col)
         __host__ __device__
-        auto& operator()(int row, int col) noexcept { return derived()(row, col); }
+        auto& operator()(long row, long col) noexcept { return derived()(row, col); }
 
         __host__ __device__
-        const auto& operator()(int row, int col) const noexcept { return derived()(row, col); }
+        const auto& operator()(long row, long col) const noexcept { return derived()(row, col); }
 
         __host__ __device__
         auto* getArray() noexcept { return derived().getArray(); }
@@ -68,13 +68,13 @@ namespace openfdcm::core::cuda {
      * @tparam Rows Number of rows (use core::cuda::Dynamic for dynamic size).
      * @tparam Cols Number of columns (use core::cuda::Dynamic for dynamic size).
      */
-    template <typename T, int Rows = core::cuda::Dynamic, int Cols = core::cuda::Dynamic>
+    template <typename T, long Rows, long Cols>
     class CudaArray : public CudaArrayBase<CudaArray<T, Rows, Cols>> {
         T* cuda_array_;         // Raw pointer for the device memory
         T* tmp_cuda_array_;     // Temporary storage for the device memory
         Eigen::Index cols_, rows_;       // Used for dynamic cases
 
-        static T* allocateArray(int size) {
+        static T* allocateArray(long size) {
             T* cuda_array;
             cudaError_t cudaStatus = cudaMalloc((void**)&cuda_array, size * sizeof(T));
             if (cudaStatus != cudaSuccess) {
@@ -92,7 +92,7 @@ namespace openfdcm::core::cuda {
             }
         }
 
-        static constexpr int computeSize() noexcept {
+        static constexpr long computeSize() noexcept {
             return (Rows == core::cuda::Dynamic || Cols == core::cuda::Dynamic) ? -1 : Rows * Cols;
         }
 
@@ -106,19 +106,20 @@ namespace openfdcm::core::cuda {
         static_assert(!(Rows == 0 && Cols == 0), "Rows and Cols cannot both be zero.");
 
         // Constructor for dynamic size
-        CudaArray(int rows, int cols)
+        CudaArray(long rows, long cols)
                 : cuda_array_{ allocateArray(cols * rows) }
                 , tmp_cuda_array_{ allocateArray(cols * rows) }
                 , cols_{ cols }
                 , rows_{ rows }
         {
-            static_assert(Rows == core::cuda::Dynamic || Cols == core::cuda::Dynamic, "Use dynamic constructor only for dynamic size.");
+            if constexpr (Rows != core::cuda::Dynamic){assert(Rows == rows);}
+            if constexpr (Cols != core::cuda::Dynamic){assert(Cols == cols);}
         }
 
         // Constructor for when Rows == 1 or Cols == 1 (1D array)
-        template <int R = Rows, int C = Cols,
-                typename std::enable_if<(R == 1 || C == 1) && !(R == 0 && C == 0), int>::type = 0>
-        CudaArray(int size)
+        template <long R = Rows, long C = Cols,
+                typename std::enable_if<(R == 1 || C == 1) && !(R == 0 && C == 0), long>::type = 0>
+        CudaArray(long size)
                 : cuda_array_{ allocateArray(size) }
                 , tmp_cuda_array_{ allocateArray(size) }
                 , cols_{ (Cols == 1) ? 1 : size }
@@ -137,27 +138,35 @@ namespace openfdcm::core::cuda {
             static_assert(Rows != core::cuda::Dynamic && Cols != core::cuda::Dynamic, "Use default constructor only for static size.");
         }
 
-        // Constructor from Eigen array (for both dynamic and static-sized CudaArray)
-        template<typename Derived>
-        CudaArray(Eigen::DenseBase<Derived> const& eigenCpuArray)
-                : cuda_array_{ nullptr }
-                , tmp_cuda_array_{ nullptr }
-                , cols_{ (Cols == core::cuda::Dynamic) ? eigenCpuArray.cols() : Cols }
-                , rows_{ (Rows == core::cuda::Dynamic) ? eigenCpuArray.rows() : Rows }
+        CudaArray(T const* data, long rows, long cols)
+                : CudaArray{rows, cols}
         {
-            // If the CudaArray has static size, check if Eigen matrix matches the static dimensions
-            if constexpr (Rows != core::cuda::Dynamic && Cols != core::cuda::Dynamic) {
-                if (eigenCpuArray.rows() != Rows || eigenCpuArray.cols() != Cols) {
-                    throw std::invalid_argument("Eigen array dimensions must match the static size of CudaArray.");
-                }
+            cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cuda_array_),
+                                                reinterpret_cast<const void*>(data),
+                                                rows * cols * sizeof(T),
+                                                cudaMemcpyHostToDevice);
+            if (cudaStatus != cudaSuccess) {
+                throw std::runtime_error{"cudaMemcpy failed: " + std::string(cudaGetErrorString(cudaStatus))};
             }
+        }
 
-            // Allocate memory for both the main array and the temporary array
-            cuda_array_ = allocateArray(rows_ * cols_);
-            tmp_cuda_array_ = allocateArray(rows_ * cols_);
+        template <long R = Rows, long C = Cols,
+                typename std::enable_if<(R == 1 || C == 1) && !(R == 0 && C == 0), long>::type = 0>
+        CudaArray(T const* data, long size)
+                : cuda_array_{ allocateArray(size) }
+                , tmp_cuda_array_{ allocateArray(size) }
+                , cols_{ (Cols == 1) ? 1 : size }
+                , rows_{ (Rows == 1) ? 1 : size }
+        {
+            static_assert((Rows == 1 || Cols == 1), "Constructor only available when Rows == 1 or Cols == 1.");
 
-            // Copy data from the Eigen CPU array to the CUDA array (host to device)
-            copyToCuda(*this, eigenCpuArray);
+            cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cuda_array_),
+                                                reinterpret_cast<const void*>(data),
+                                                size * sizeof(T),
+                                                cudaMemcpyHostToDevice);
+            if (cudaStatus != cudaSuccess) {
+                throw std::runtime_error{"cudaMemcpy failed: " + std::string(cudaGetErrorString(cudaStatus))};
+            }
         }
 
         ~CudaArray() {
@@ -197,24 +206,24 @@ namespace openfdcm::core::cuda {
         }
 
         // Size Accessors
-        __host__ __device__ int cols() const noexcept { return cols_; }
-        __host__ __device__ int rows() const noexcept { return rows_; }
+        __host__ __device__ auto cols() const noexcept { return cols_; }
+        __host__ __device__ auto rows() const noexcept { return rows_; }
 
         // Raw device array access
         __host__ __device__ T* getArray() const noexcept { return cuda_array_; }
         __host__ __device__ T* getTmpArray() const noexcept { return tmp_cuda_array_; }
 
         __device__
-        T& operator()(int row, int col) noexcept { return cuda_array_[row + col * rows_]; }
+        T& operator()(long row, long col) noexcept { return cuda_array_[row + col * rows_]; }
 
         __device__
-        const T& operator()(int row, int col) const noexcept { return cuda_array_[row + col * rows_]; }
+        const T& operator()(long row, long col) const noexcept { return cuda_array_[row + col * rows_]; }
 
         __device__
-        T& operator()(int idx) noexcept requires (Rows == 1 || Cols == 1) {return cuda_array_[idx];}
+        T& operator()(long idx) noexcept requires (Rows == 1 || Cols == 1) {return cuda_array_[idx];}
 
         __device__
-        const T& operator()(int idx) const noexcept requires (Rows == 1 || Cols == 1) {return cuda_array_[idx];}
+        const T& operator()(long idx) const noexcept requires (Rows == 1 || Cols == 1) {return cuda_array_[idx];}
 
         __host__ __device__ auto size() const noexcept { return cols_ * rows_; }
 
@@ -232,12 +241,12 @@ namespace openfdcm::core::cuda {
     CudaArray(Eigen::DenseBase<Derived> const& eigenCpuArray)
     -> CudaArray<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>;
 
-    template<typename T, int Size> using cuVector = CudaArray<T, Size, 1>;
+    template<typename T, long Size> using cuVector = CudaArray<T, Size, 1>;
     using cuSize = cuVector<size_t, 2>;
     using cuPoint2 = cuVector<float, 2>;
     using cuMat22 = CudaArray<float, 2, 2>;
     using cuMat23 = CudaArray<float, 2, 3>;
-    using cuLine = CudaArray<float, 4>; // x1, y1, x2, y2
+    using cuLine = CudaArray<float, 4, 1>; // x1, y1, x2, y2
     using cuLineArray = CudaArray<float, 4, -1>;
 
     //---------------------------------------------------------------------------------------------------
@@ -313,7 +322,7 @@ namespace openfdcm::core::cuda {
     }
 
     template <typename DerivedArray>
-    __host__ __device__
+    __host__
     inline void sqrt(DerivedArray& array, CudaStreamPtr const& stream) {
         int threadsPerBlock = 256;
         int blocksPerGrid = (array.size() + threadsPerBlock - 1) / threadsPerBlock;
@@ -329,7 +338,7 @@ namespace openfdcm::core::cuda {
     }
 
 
-    template <typename T, int Rows, int Cols>
+    template <typename T, long Rows, long Cols>
     __host__
     inline void CudaArray<T,Rows,Cols>::transpose(CudaStreamPtr const& stream) {
         dim3 blockSize(OPENFDCM_TILE_DIM, OPENFDCM_BLOCK_ROWS);
@@ -360,10 +369,9 @@ namespace openfdcm::core::cuda {
             assert(cudaArray.rows() == cpuArray.rows() && cudaArray.cols() == cpuArray.cols());
         }
 
-        // Evaluate the cpuArray if it is an IndexedView
-        auto evaluatedCpuArray = cpuArray.eval(); // This forces evaluation into a matrix
+        // (void*) is absolutely necessary
         cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cudaArray.getArray()),
-                                            reinterpret_cast<const void*>(evaluatedCpuArray.data()),
+                                            reinterpret_cast<const void*>(cpuArray.derived().data()),
                                             cpuArray.size() * sizeof(typename DerivedCpu::Scalar),
                                             cudaMemcpyHostToDevice);
         if (cudaStatus != cudaSuccess) {
@@ -399,11 +407,8 @@ namespace openfdcm::core::cuda {
         } else {
             assert(cudaArray.rows() == cpuArray.rows() && cudaArray.cols() == cpuArray.cols());
         }
-
-        // Evaluate the cpuArray if it is an IndexedView
-        auto evaluatedCpuArray = cpuArray.eval(); // This forces evaluation into a matrix
         cudaError_t cudaStatus = cudaMemcpyAsync(reinterpret_cast<void*>(cudaArray.getArray()),
-                                                 reinterpret_cast<const void*>(evaluatedCpuArray.data()),
+                                                 reinterpret_cast<const void*>(cpuArray.derived().data()),
                                                  cpuArray.size() * sizeof(typename DerivedCpu::Scalar),
                                                  cudaMemcpyHostToDevice, stream->getStream());
         if (cudaStatus != cudaSuccess) {

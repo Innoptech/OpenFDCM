@@ -80,7 +80,7 @@ namespace openfdcm::core::cuda {
     }
 
     __global__
-    inline void drawLinesKernel(CudaArray<float>& d_img, cuLineArray const& culinearray, float const color) {
+    inline void drawLinesKernel(CudaArray<float,-1,-1>& d_img, cuLineArray const& culinearray, float const color) {
         int idx = blockIdx.x * blockDim.x + threadIdx.x;
         if (idx >= culinearray.cols()) return;
 
@@ -110,7 +110,7 @@ namespace openfdcm::core::cuda {
      * @param stream The cuda stream used to draw
      */
     __host__
-    inline void drawLines(CudaArray<float>& img, cuLineArray const& culinearray,
+    inline void drawLines(CudaArray<float,-1,-1>& img, cuLineArray const& culinearray,
                           float const color, CudaStreamPtr const& stream) noexcept(false)
     {
         if (culinearray.cols() == 0) return;

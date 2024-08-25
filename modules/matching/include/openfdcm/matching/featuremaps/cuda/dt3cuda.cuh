@@ -22,7 +22,7 @@ namespace openfdcm::matching {
         };
 
         struct Dt3CudaMap {
-            std::vector<core::cuda::CudaArray<float>> features;
+            std::vector<std::shared_ptr<core::cuda::CudaArray<float,-1,-1>>> features;
             std::vector<float> sortedAngles;
         };
 
@@ -56,7 +56,7 @@ namespace openfdcm::matching {
         * @param pool A streampool to parallelize feature map generation on cuda
         * @return The FDCM featuremap
         */
-        template<core::cuda::Distance D = core::cuda::Distance::L2>
+        template<core::Distance D = core::Distance::L2>
         inline cuda::Dt3Cuda buildCudaFeaturemap(const core::LineArray &scene, const cuda::Dt3CudaParameters &params,
                                                  const std::shared_ptr<BS::thread_pool> &threadPool = std::make_shared<BS::thread_pool>(),
                                                  const std::shared_ptr<core::cuda::CudaStreamPool> &streamPool =
@@ -75,7 +75,9 @@ namespace openfdcm::matching {
 
             // Step 1: Define a number of linearly spaced angles
             for (size_t i{0}; i < params.depth; i++) {
-                dt3map.features.emplace_back(sceneShift.sceneSize.y(), sceneShift.sceneSize.x());
+                dt3map.features.emplace_back(
+                        std::make_shared<core::cuda::CudaArray<float,-1,-1>>(
+                                sceneShift.sceneSize.y(), sceneShift.sceneSize.x()));
                 dt3map.sortedAngles.emplace_back(float(i) * M_PIf / float(params.depth) - M_PI_2f);
             }
             assert(std::is_sorted(std::begin(dt3map.sortedAngles), std::end(dt3map.sortedAngles)));
@@ -87,18 +89,18 @@ namespace openfdcm::matching {
                 // Acquire a stream from the pool
                 auto streamWrapper = streamPool->getStream();
 
-                auto const &orientedSceneLine = scene(Eigen::all, indices.at(angleIdx)).eval();
-                core::cuda::CudaArray cuScene(translatedScene(Eigen::all, indices));
+                Eigen::Matrix<float, 4, Eigen::Dynamic> orientedScene = scene(Eigen::all, indices.at(angleIdx)).eval();
+                core::cuda::CudaArray<float, 4, -1> cuScene(orientedScene.data(), 4, orientedScene.cols());
 
-                auto &d_img = dt3map.features[angleIdx];
+                auto &d_img = *dt3map.features[angleIdx];
 
                 // Initialize the image with max values
-                setAll(d_img, 0.f, streamWrapper);
+                setAll(d_img, std::numeric_limits<float>::max(), streamWrapper);
                 core::cuda::synchronize(streamWrapper);
                 drawLines(d_img, cuScene, 0, streamWrapper);
                 core::cuda::synchronize(streamWrapper);
 
-                core::cuda::distanceTransform<D>(dt3map.features.at(angleIdx), cuScene, streamWrapper);
+                core::cuda::distanceTransform<D>(d_img, cuScene, streamWrapper);
                 streamPool->returnStream(std::move(streamWrapper));
             };
 
@@ -127,7 +129,7 @@ namespace openfdcm::matching {
             // Step 5: Line integral
             for (size_t angleIdx{0}; angleIdx < dt3map.sortedAngles.size(); ++angleIdx) {
                 streamWrapper = streamPool->getStream();
-                lineIntegral(dt3map.features[angleIdx], dt3map.sortedAngles[angleIdx], streamWrapper);
+                lineIntegral(*dt3map.features[angleIdx], dt3map.sortedAngles[angleIdx], streamWrapper);
                 streamPool->returnStream(std::move(streamWrapper));
             }
 

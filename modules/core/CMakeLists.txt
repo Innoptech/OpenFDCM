@@ -49,7 +49,7 @@ else()
     set(CUDA_PROPERTIES "")
 endif()
 
-add_library(openfdcm_core ${src_files})
+add_library(openfdcm_core STATIC ${src_files})
 target_link_libraries(openfdcm_core Eigen3::Eigen packio ${CUDA_LIBS})
 target_include_directories(openfdcm_core PUBLIC include/ ${CMAKE_CURRENT_BINARY_DIR}/generated/ ${CUDA_INCLUDES})
 add_library(openfdcm::core ALIAS openfdcm_core)

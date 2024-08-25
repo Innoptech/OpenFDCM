@@ -7,8 +7,8 @@
 
 namespace openfdcm::core::cuda {
 
-    __global__
-    void lineIntegralKernelCol(CudaArray<float>& d_img, float rastvec_x, float rastvec_y, int forwardIdx) {
+    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
+    __global__ void lineIntegralKernelCol(DerivedArray& d_img, float rastvec_x, float rastvec_y, int forwardIdx) {
         int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
         int col = forwardIdx; // for readability
@@ -25,8 +25,8 @@ namespace openfdcm::core::cuda {
         d_img(idx,p1x) += d_img(y2,previous_p1x);
     }
 
-    __host__
-    inline void lineIntegral(CudaArray<float>& d_img, float lineAngle, CudaStreamPtr const& stream) noexcept
+    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
+    __host__ inline void lineIntegral(DerivedArray& d_img, float lineAngle, CudaStreamPtr const& stream) noexcept
     {
         Point2 rastvec = openfdcm::core::rasterizeVector(Point2{std::cos(lineAngle), std::sin(lineAngle)});
 
@@ -53,8 +53,8 @@ namespace openfdcm::core::cuda {
             transpose(d_img, stream);
     }
 
-    __global__
-    void distanceTransformColumnPassL2Kernel(CudaArray<float>& d_img) {
+    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
+    __global__ void distanceTransformColumnPassL2Kernel(DerivedArray& d_img) {
         int col = blockIdx.x;
         if (col >= d_img.cols()) return;
 
@@ -95,8 +95,8 @@ namespace openfdcm::core::cuda {
      * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions for L2_SQUARED distance
      * @param d_img The device image that will be transformed in place
      */
-    __host__
-    static inline void _distanceTransformColumnPassL2(CudaArray<float> &d_img, CudaStreamPtr const& stream) noexcept {
+    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
+    __host__ static inline void _distanceTransformColumnPassL2(DerivedArray &d_img, CudaStreamPtr const& stream) noexcept {
         // Determine block and grid sizes
         int threadsPerBlock = d_img.rows(); // Each thread handles one row in a column
         int blocksPerGrid = d_img.cols();   // Each block handles one column
@@ -105,9 +105,8 @@ namespace openfdcm::core::cuda {
         synchronize(stream);
     }
 
-
-    __global__
-    void distanceTransformColumnPassL1Kernel(CudaArray<float> &d_img) {
+    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
+    __global__ void distanceTransformColumnPassL1Kernel(DerivedArray &d_img) {
         int col = blockIdx.x;
         if (col >= d_img.cols()) return;
 
@@ -126,15 +125,14 @@ namespace openfdcm::core::cuda {
      * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions
      * @param d_img The device image that will be transformed in place
      */
-    __host__
-    static inline void _distanceTransformColumnPassL1(CudaArray<float> &d_img, CudaStreamPtr const& stream) noexcept {
+    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
+    __host__ static inline void _distanceTransformColumnPassL1(DerivedArray &d_img, CudaStreamPtr const& stream) noexcept {
         int threadsPerBlock = d_img.rows();  // Each thread handles one row in a column
         int blocksPerGrid = d_img.cols();    // Each block handles one column
         distanceTransformColumnPassL1Kernel<<<blocksPerGrid, threadsPerBlock, 0, stream->getStream()>>>(d_img);
         synchronize(stream);
     }
 
-    enum class Distance {L2=0, L2_SQUARED, L1 };
     /**
      * @brief Perform the distance transform for a given set of lines.
      *
@@ -154,12 +152,11 @@ namespace openfdcm::core::cuda {
      * @param linearray The given set of lines for which the distance transform is to be computed.
      * @return The resulting image with the distance transform applied, where each pixel holds the distance value.
      */
-    template<Distance D=Distance::L2>
-    __host__
-    inline void distanceTransform(CudaArray<float> &colmaj_img, cuLineArray const& linearray,
+    template<core::Distance D=core::Distance::L2, typename DerivedArray>
+    __host__ inline void distanceTransform(DerivedArray &colmaj_img, cuLineArray const& linearray,
                                   CudaStreamPtr const& stream) noexcept {
 
-        if constexpr (D == Distance::L1) {
+        if constexpr (D == core::Distance::L1) {
             _distanceTransformColumnPassL1(colmaj_img, stream);
             transpose(colmaj_img, stream);
             _distanceTransformColumnPassL1(colmaj_img, stream);
@@ -172,13 +169,13 @@ namespace openfdcm::core::cuda {
         _distanceTransformColumnPassL2(colmaj_img, stream);
         transpose(colmaj_img, stream);
 
-        if constexpr (D == Distance::L2) {
-            sqrt(colmaj_img, stream);
+        if constexpr (D == core::Distance::L2) {
+            core::cuda::sqrt(colmaj_img, stream);
         }
     }
 
-    __global__
-    void minCoeffKernel(CudaArray<float>& array1, CudaArray<float> const& array2, float coeff) {
+    template<typename DerivedArray>
+    __global__ void minCoeffKernel(DerivedArray& array1, DerivedArray const& array2, float coeff) {
         int idx_x = blockIdx.x * blockDim.x + threadIdx.x;
         int idx_y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -195,7 +192,7 @@ namespace openfdcm::core::cuda {
      * @param stream The cuda stream on which to run the kernel
      */
     __host__
-    inline void propagateOrientation(std::vector<CudaArray<float>> &featuremap,
+    inline void propagateOrientation(std::vector<std::shared_ptr<CudaArray<float,-1,-1>>> &featuremap,
                                      std::vector<float> const& angles, float coeff, CudaStreamPtr const& stream) noexcept
     {
         assert(!featuremap.empty());
@@ -209,8 +206,8 @@ namespace openfdcm::core::cuda {
         // Set the dimensions of the grid and block
         int numThreadsX{16}, numThreadsY{16};
         dim3 threadsPerBlock(numThreadsX, numThreadsY);
-        dim3 numBlocks((featuremap[0].cols() + numThreadsX - 1) / numThreadsX,
-                       (featuremap[0].rows() + numThreadsY - 1) / numThreadsY);
+        dim3 numBlocks((featuremap[0]->cols() + numThreadsX - 1) / numThreadsX,
+                       (featuremap[0]->rows() + numThreadsY - 1) / numThreadsY);
 
         auto propagate = [&](int start, int end, int step) {
             for (int c = start; c != end; c += step) {
@@ -223,7 +220,7 @@ namespace openfdcm::core::cuda {
                 const float h = std::abs(angle1 - angle2);
                 const float min_h = std::min(h, std::abs(h - M_PIf));
 
-                minCoeffKernel<<<numBlocks, threadsPerBlock, 0, stream->getStream()>>>(featuremap[c2], featuremap[c1], coeff * min_h);
+                minCoeffKernel<<<numBlocks, threadsPerBlock, 0, stream->getStream()>>>(*featuremap[c2], *featuremap[c1], coeff * min_h);
                 synchronize(stream);
             }
         };

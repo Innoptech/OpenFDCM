@@ -77,8 +77,8 @@ if(OPENFDCM_USE_CUDA)
 
     # Allow users to specify CUDA architectures, otherwise use a default set
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES all-major)
-        message(STATUS "Using default CUDA architectures: all-major")
+        set(CMAKE_CUDA_ARCHITECTURES native)
+        message(STATUS "Using default CUDA architectures: native")
     else()
         message(STATUS "Using user-defined CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
     endif()

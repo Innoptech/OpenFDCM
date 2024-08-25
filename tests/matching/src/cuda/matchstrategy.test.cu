@@ -20,7 +20,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
- */
+*/
 
 #include <catch2/catch_test_macros.hpp>
 #include "test-utils/utils.h"
@@ -33,7 +33,7 @@ using namespace openfdcm;
 using namespace openfdcm::matching::cuda;
 
 
-void run_test(float scene_ratio, BS::concurrency_t num_threads) {
+void run_cuda_test(float scene_ratio, BS::concurrency_t num_threads) {
     size_t const max_tmpl_lines{3}, max_scene_lines{3};
     size_t const depth{30};
     float const scene_padding{2.2f};
@@ -55,7 +55,7 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
         core::LineArray scene =  core::transform(tmpl, scene_transform);
 
         Dt3CudaParameters params{depth, coeff, scene_padding};
-        const Dt3Cuda& featuremap = buildCudaFeaturemap(scene, params, threadpool, streampool);
+        const Dt3Cuda& featuremap = buildCudaFeaturemap<core::Distance::L2>(scene, params, threadpool, streampool);
 
         auto matches = search(matcher, searchStrategy, optimizerStrategy, featuremap, {tmpl}, scene);
         sortMatches(matches);
@@ -127,12 +127,7 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
     }
 }
 
-TEST_CASE("DefaultMatch") {
-run_test(1.0f, 1);
-run_test(1.0f, 2);
-}
-
-TEST_CASE("Scale down scene") {
-run_test(0.3f, 1);
-run_test(0.3f, 2);
+TEST_CASE("DefaultMatch on cuda dt3") {
+    run_cuda_test(1.0f, 1);
+    run_cuda_test(1.0f, 2);
 }

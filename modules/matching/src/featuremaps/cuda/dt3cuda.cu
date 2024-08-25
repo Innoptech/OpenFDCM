@@ -11,20 +11,21 @@ namespace openfdcm::matching
         return detail::minmaxTranslation(tmpl, align_vec, featuremap.getFeatureSize(), featuremap.getSceneTranslation());
     }
 
-    void copyCudaArrayVectorToDevice(std::vector<core::cuda::CudaArray<float>> const& hostArray,
-                                     core::cuda::CudaArray<float>*& deviceArray) {
+    template<typename DerivedArray>
+    void copyCudaArrayVectorToDevice(std::vector<std::shared_ptr<DerivedArray>> const& hostArray,
+                                     DerivedArray*& deviceArray) {
         // Allocate space for the CudaArray objects on the device
-        cudaMalloc(&deviceArray, hostArray.size() * sizeof(core::cuda::CudaArray<float>));
+        cudaMalloc(&deviceArray, hostArray.size() * sizeof(DerivedArray));
 
         // Copy each individual CudaArray to the device (just the pointers)
         for (size_t i = 0; i < hostArray.size(); ++i) {
-            cudaMemcpy(deviceArray + i, &hostArray[i], sizeof(core::cuda::CudaArray<float>), cudaMemcpyHostToDevice);
+            cudaMemcpy(deviceArray + i, hostArray[i].get(), sizeof(DerivedArray), cudaMemcpyHostToDevice);
         }
     }
 
     __global__
-    void evaluateKernel(core::cuda::CudaArray<float>* d_array,
-                        core::cuda::cuVector<size_t, -1> const& cuTmplIdxPerTransMap,
+    void evaluateKernel(core::cuda::CudaArray<float,-1,-1>* d_array,
+                        core::cuda::cuVector<size_t, -1> const& cuTmplIdxPerTrans,
                         core::cuda::CudaArray<float, 2, -1> const& cuTrans,
                         core::cuda::cuVector<size_t, -1> const& cuLineIndices,
                         core::cuda::CudaArray<float, 4, -1> const& cuTmpl,
@@ -33,10 +34,10 @@ namespace openfdcm::matching
     {
         int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-        if(idx >= cuTmplIdxPerTransMap.size())
+        if(idx >= cuTmplIdxPerTrans.size())
             return;
 
-        auto tmplIdx = cuTmplIdxPerTransMap(idx);
+        auto tmplIdx = cuTmplIdxPerTrans(idx);
         auto translation_x = cuTrans(0, idx);
         auto translation_y = cuTrans(1, idx);
         auto orientationIdx  = cuLineOrientationIdx(idx);
@@ -44,7 +45,7 @@ namespace openfdcm::matching
         auto startLineIdx = cuLineIndices(tmplIdx);
 
         size_t endLineIdx;
-        if(tmplIdx == cuTmplIdxPerTransMap.size() -1) {
+        if(tmplIdx == cuTmplIdxPerTrans.size() -1) {
             endLineIdx = cuTmpl.cols();
         } else {
             endLineIdx = cuLineIndices(tmplIdx+1);
@@ -54,8 +55,8 @@ namespace openfdcm::matching
         scores(idx) = 0.f;
         for(size_t lineIdx{startLineIdx}; lineIdx < endLineIdx; ++lineIdx)
         {
-            int p1x(cuTmpl(0,lineIdx)), p1y(cuTmpl(1,lineIdx)),
-            p2x(cuTmpl(2,lineIdx)), p2y(cuTmpl(3,lineIdx));
+            int p1x(cuTmpl(0,lineIdx)+translation_x), p1y(cuTmpl(1,lineIdx)+translation_y),
+            p2x(cuTmpl(2,lineIdx)+translation_x), p2y(cuTmpl(3,lineIdx)+translation_y);
 
             const auto& feature = d_array[orientationIdx];
 
@@ -91,10 +92,8 @@ namespace openfdcm::matching
             }
         }
 
-        Eigen::Map<const Eigen::Vector<size_t, -1>> tmplIdxPerTransMap(tmplIdxPerTrans.data(), transSize);
-        Eigen::Map<const Eigen::Array<float, 2, -1>> transMap(translations.data()->data()->data(), 2, transSize);
-        core::cuda::CudaArray const cuTmplIdxPerTransMap(tmplIdxPerTransMap); // translations
-        core::cuda::CudaArray const cuTrans(transMap); // translations
+        core::cuda::cuVector<size_t, -1> const cuTmplIdxPerTrans(tmplIdxPerTrans.data(), transSize); // translations
+        core::cuda::CudaArray<float,2,-1> const cuTrans(translations.data()->data()->data(), 2, transSize); // translations
 
 
         std::vector<size_t> numLinesPerTmpl{}; numLinesPerTmpl.reserve(templates.size());
@@ -106,15 +105,13 @@ namespace openfdcm::matching
         std::vector<size_t> lineIndices(numLinesPerTmpl.size());
         std::exclusive_scan(std::begin(numLinesPerTmpl), std::end(numLinesPerTmpl), std::begin(lineIndices), 0);
 
-        Eigen::Map<const Eigen::Vector<size_t, -1>> lineIndicesMap(lineIndices.data(), lineIndices.size());
-        Eigen::Map<const Eigen::Array<float, 4, -1>> tmplMap(templates.data()->data(), 4, tmplSize);
-
-        core::cuda::CudaArray const cuLineIndices(lineIndicesMap); // Start indices of lines per template
-        core::cuda::CudaArray const cuTmpl(tmplMap); // templates
+        core::cuda::cuVector<size_t, -1> const cuLineIndices(lineIndices.data(), lineIndices.size()); // Start indices of lines per template
+        core::cuda::CudaArray<float,4,-1> const cuTmpl(templates.data()->data(), 4, tmplSize); // templates
 
         const auto& dt3map = featuremap.getDt3Map();
 
         // Identify the line closest orientations, preallocate vector
+        Eigen::Map<const Eigen::Array<float, 4, -1>> tmplMap(templates.data()->data(), 4, tmplSize);
         const auto& tmplAngles = openfdcm::core::getAngle(tmplMap);
         std::vector<size_t> lineOrientationIdx{}; lineOrientationIdx.reserve(tmplSize);
         for (long i = 0; i < tmplSize; ++i)
@@ -122,11 +119,10 @@ namespace openfdcm::matching
             const core::Line& line = core::getLine(tmplMap, i);
             lineOrientationIdx[i] = detail::closestOrientationIndex(dt3map.sortedAngles, line);
         }
-        Eigen::Map<const Eigen::Vector<size_t, -1>> lineOrientationIdxMap(lineOrientationIdx.data(), tmplSize);
-        core::cuda::CudaArray const cuLineOrientationIdx(lineOrientationIdxMap); // line orientation indices
+        core::cuda::cuVector<size_t, -1> cuLineOrientationIdx(lineOrientationIdx.data(), tmplSize);
 
         // Copy an array of CudaArray to the GPU
-        core::cuda::CudaArray<float>* d_array;
+        core::cuda::CudaArray<float,-1,-1>* d_array;
         copyCudaArrayVectorToDevice(dt3map.features, d_array);
 
         //------------------------------------------------------------------------------------------------
@@ -142,7 +138,7 @@ namespace openfdcm::matching
         int blocksPerGrid = (transSize + threadsPerBlock - 1) / threadsPerBlock;
 
         evaluateKernel<<<blocksPerGrid, threadsPerBlock, 0, streamWrapper->getStream()>>>(
-                d_array,cuTmplIdxPerTransMap,cuTrans,cuLineIndices,cuTmpl,cuLineOrientationIdx, cuScores);
+                d_array,cuTmplIdxPerTrans,cuTrans,cuLineIndices,cuTmpl,cuLineOrientationIdx, cuScores);
         core::cuda::synchronize(streamWrapper);
 
         streamPool->returnStream(std::move(streamWrapper));

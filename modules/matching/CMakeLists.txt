@@ -49,7 +49,7 @@ else()
     set(CUDA_PROPERTIES "")
 endif()
 
-add_library(openfdcm_matching ${src_files})
+add_library(openfdcm_matching STATIC ${src_files})
 target_link_libraries(openfdcm_matching openfdcm::core threadpool ${CUDA_LIBS})
 target_include_directories(openfdcm_matching PUBLIC include/ ${CUDA_INCLUDES})
 add_library(openfdcm::matching ALIAS openfdcm_matching)
