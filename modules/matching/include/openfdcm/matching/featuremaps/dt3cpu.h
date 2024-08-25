@@ -130,22 +130,6 @@ namespace openfdcm::matching {
          * @return The resulting SceneShift object
          */
         SceneShift getSceneCenteredTranslation(core::LineArray const& scene, float scene_padding) noexcept;
-
-        /**
-         * @brief Propagate the distance transform in the orientation (feature) space
-         * @param featuremap The feature map (32bits)
-         * @param coeff The propagation coefficient
-         */
-        void propagateOrientation(Dt3CpuMap<float> &featuremap, float coeff) noexcept;
-
-        template<typename Vec>
-        inline Eigen::VectorXi vectorToEigenVector(const Vec &vec) noexcept {
-            Eigen::VectorXi eigenVec(vec.size());
-            for (Eigen::Index i{0}; i < static_cast<Eigen::Index>(vec.size()); ++i) {
-                eigenVec[i] = vec[static_cast<size_t>(i)];
-            }
-            return eigenVec;
-        }
     }
 
     template<>
@@ -211,7 +195,7 @@ namespace openfdcm::matching {
         }
 
         // Step 4: Propagate orientation
-        detail::propagateOrientation(dt3map, params.dt3Coeff);
+        core::propagateOrientation(dt3map.features, dt3map.sortedAngles, params.dt3Coeff);
 
         // Step 5: Line integral
         for (size_t angleIdx{0}; angleIdx < dt3map.sortedAngles.size(); ++angleIdx)

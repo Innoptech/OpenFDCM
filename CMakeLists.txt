@@ -57,12 +57,50 @@ endif()
 #-------------------------------------------------------------------------------
 # CMAKE OPTIONS
 #-------------------------------------------------------------------------------
+option(OPENFDCM_USE_CUDA "Enable the usage of cuda if the cuda." ON)
 option(OPENFDCM_BUILD_PYTHON "Enable the compilation of the python bindings." OFF)
 option(OPENFDCM_BUILD_TESTS "Enable the compilation of the test files." OFF)
 option(OPENFDCM_BUILD_DOCS "Enable the build of the documentation and website." OFF)
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     add_definitions(-DDEBUG)
+endif()
+
+#-------------------------------------------------------------------------------
+# Enable conditional CUDA
+#-------------------------------------------------------------------------------
+include(CheckLanguage)
+check_language(CUDA)
+
+# If CUDA is supported and the user has enabled it
+if(OPENFDCM_USE_CUDA)
+
+    # Allow users to specify CUDA architectures, otherwise use a default set
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES all-major)
+        message(STATUS "Using default CUDA architectures: all-major")
+    else()
+        message(STATUS "Using user-defined CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+    endif()
+
+    find_package(CUDAToolkit REQUIRED)
+    if(CUDAToolkit_FOUND)
+        message(STATUS "CUDA compiler found: Enabling CUDA support.")
+        enable_language(CUDA)
+        set(OPENFDCM_CUDA_ENABLED TRUE CACHE INTERNAL "CUDA support enabled")
+
+        if(NOT DEFINED CMAKE_CUDA_STANDARD)
+            set(CMAKE_CUDA_STANDARD 20)
+            set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+        endif()
+
+        # Add any additional CUDA-specific flags here
+        set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -O3")
+    else()
+        message(FATAL_ERROR "CUDA not found.")
+    endif()
+else()
+    message(STATUS "CUDA support disabled.")
 endif()
 
 #-------------------------------------------------------------------------------

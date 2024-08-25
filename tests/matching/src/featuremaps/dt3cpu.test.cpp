@@ -72,7 +72,7 @@ TEST_CASE("getSceneCenteredTranslation")
     }
 }
 
-TEST_CASE("minmaxTranslation")
+TEST_CASE("minmaxTranslation", "[dt3cpu]")
 {
     SECTION("along X")
     {

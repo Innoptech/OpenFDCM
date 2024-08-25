@@ -101,33 +101,6 @@ namespace openfdcm::matching
             return sortedAngles.size() - 1;
         }
 
-        void propagateOrientation(Dt3CpuMap<float> &featuremap, float coeff) noexcept {
-            assert(featuremap.sortedAngles.size() == featuremap.features.size());
-
-            // Precompute constants
-            const int m = static_cast<int>(featuremap.sortedAngles.size());
-            const int one_and_a_half_cycle_forward = static_cast<int>(std::ceil(1.5 * m));
-            const int one_and_a_half_cycle_backward = -static_cast<int>(std::floor(1.5 * m));
-
-            auto propagate = [&](int start, int end, int step) {
-                for (int c = start; c != end; c += step) {
-                    int c1 = (m + ((c - step) % m)) % m;
-                    int c2 = (m + (c % m)) % m;
-
-                    const float angle1 = featuremap.sortedAngles[c1];
-                    const float angle2 = featuremap.sortedAngles[c2];
-
-                    const float h = std::abs(angle1 - angle2);
-                    const float min_h = std::min(h, std::abs(h - M_PIf));
-
-                    featuremap.features[c2] = featuremap.features[c2].min(featuremap.features[c1] + coeff * min_h);
-                }
-            };
-
-            propagate(0, one_and_a_half_cycle_forward, 1);
-            propagate(m, one_and_a_half_cycle_backward, -1);
-        }
-
         SceneShift getSceneCenteredTranslation(core::LineArray const &scene, float scene_padding) noexcept {
             auto const &[min_point, max_point] = core::minmaxPoint(scene);
             core::Point2 const distanceminmax = max_point - min_point;
