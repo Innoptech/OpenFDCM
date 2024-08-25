@@ -23,10 +23,9 @@ SOFTWARE.
 */
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_vector.hpp>
 #include "openfdcm/matching/featuremaps/dt3cpu.h"
 #include "test-utils/utils.h"
-
-#include <iostream>
 
 using namespace openfdcm::core;
 using namespace openfdcm::matching;
@@ -229,21 +228,15 @@ TEST_CASE("Dt3Cpu")
 {
     SECTION("closestOrientation")
     {
-        std::map<float, void*> angle_set{
-                {-M_PI_2f + M_PI / 100, nullptr},
-                {-M_PI / 4.f,            nullptr},
-                {0.f,                  nullptr},
-                {M_PI / 4.f,             nullptr},
-                {M_PI_2f - M_PI / 100,  nullptr},
-                {M_PI,                   nullptr}
-        };
+        std::vector<float> sortedAngles{-M_PI_2f + M_PI / 100,
+                -M_PI / 4.f, 0.f, M_PI / 4.f, M_PI_2f - M_PI / 100, M_PIf};
 
-        for (auto const& [angle, _] : angle_set)
+        for (auto const angle : sortedAngles)
         {
             const Line initial_line{0,0,1,0};
             const Line rotated_line = rotate(initial_line, tests::makeRotation(angle));
-            auto const& it = closestOrientation(angle_set, rotated_line);
-            REQUIRE(relativelyEqual(it->first, constrainHalfAngle(angle)));
+            auto const& idx = closestOrientationIndex(sortedAngles, rotated_line);
+            REQUIRE(relativelyEqual(sortedAngles[idx], constrainHalfAngle(angle)));
         }
     }
     SECTION("classifyLines")
@@ -254,16 +247,12 @@ TEST_CASE("Dt3Cpu")
                 {0, 20, 10, 10,  10},
                 {10, 20, 0,  0,  0}
         };
-        std::set<float> const angle_set{-M_PI_4f, 0.f, M_PI_4f, M_PI_2f};
-        std::map<float, std::vector<Eigen::Index>> const& indices = classifyLines(angle_set, linearray);
-
-        std::map<float, std::vector<Eigen::Index>> expected = {
-                {-M_PI_4f, {3}},
-                {0.f, {2}},
-                {M_PI_4f, {1}},
-                {M_PI_2f, {0,4}},
-        };
-        REQUIRE(indices == expected);
+        std::vector<float> const sortedAngles{-M_PI_4f, 0.f, M_PI_4f, M_PI_2f};
+        auto const& indices = classifyLines(sortedAngles, linearray);
+        std::vector<std::vector<Eigen::Index>> expected{{3},{2},{1},{0,4}};
+        REQUIRE(indices.size() == sortedAngles.size());
+        for(size_t angleIdx{0}; angleIdx < sortedAngles.size() ; ++angleIdx)
+            REQUIRE_THAT(indices.at(angleIdx), Catch::Matchers::Equals(expected.at(angleIdx)));
     }
     SECTION("propagateOrientation")
     {
@@ -275,21 +264,29 @@ TEST_CASE("Dt3Cpu")
                 {0},
                 {39}
         };
-        Dt3CpuMap<float> featuremap{};
-        for(const float angle : {-M_PI_4f,  0.f, M_PI_4f})
-            featuremap[angle] = RawImage<float>::Constant(featuresize.y(), featuresize.x(), INFINITY);
+
+
+        const std::vector<float> sortedAngles{-M_PI_4f,  0.f, M_PI_4f};
+        std::vector<RawImage<float>> features(sortedAngles.size());
+
+        for(size_t angleIdx{0}; angleIdx < sortedAngles.size(); ++angleIdx)
+            features[angleIdx] = RawImage<float>::Constant(featuresize.y(), featuresize.x(), INFINITY);
+
+        Dt3CpuMap<float> featuremap{features, sortedAngles};
         RawImage<float> const& img = distanceTransform<float>(linearray, featuresize);
 
-        featuremap[-M_PI_2f] = img;
+        featuremap.features[0] = img;
         propagateOrientation(featuremap, coeff);
 
-        auto [lineAngle1, feature1] = *featuremap.begin();
+        auto feature1 = featuremap.features[0];
+        auto lineAngle1 = featuremap.sortedAngles[0];
         const float distance1 = feature1(0,29);
         REQUIRE(distance1 == 29.f);
-        for(auto const& [lineAngle2, feature2] : featuremap)
+        for(size_t angleIdx{0}; angleIdx < sortedAngles.size(); ++angleIdx)
         {
-            const float dist_angle2 = std::abs(constrainHalfAngle(lineAngle1 - lineAngle2));
+            const float dist_angle2 = std::abs(constrainHalfAngle(lineAngle1 - featuremap.sortedAngles[angleIdx]));
             const float propagated = distance1 + dist_angle2*coeff;
+            const auto& feature2 = featuremap.features[angleIdx];
             REQUIRE(relativelyEqual(propagated, feature2(0,29), 0.f, 1e-5f));
         }
     }
@@ -298,17 +295,19 @@ TEST_CASE("Dt3Cpu")
         const float coeff{50.f};
         const size_t depth{4};
         const float padding{1.f};
+        auto threadpool = std::make_shared<BS::thread_pool>(1);
         const LineArray scene{
                 {0,  0,  0,  0,  1},
                 {0,  0,  0, 1, 1},
                 {0, 1, 1, 1,  1},
                 {1, 1, 0,  0,  0}
         };
-        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, padding});
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{depth, coeff, padding}, threadpool);
 
         for(auto const& line : scene.colwise())
         {
-            const auto& [angle, feature] = *closestOrientation(featuremap.getDt3Map(), line);
+            const auto& angleIdx = closestOrientationIndex(featuremap.getDt3Map().sortedAngles, line);
+            const auto& feature = featuremap.getDt3Map().features[angleIdx];
             const Eigen::Matrix<int,2,1> pt1 = p1(line).array().round().cast<int>();
             const Eigen::Matrix<int,2,1> pt2 = p2(line).array().round().cast<int>();
             const float distance = std::abs(feature(pt2.y(), pt2.x()) - feature(pt1.y(), pt1.x()));
@@ -325,7 +324,8 @@ TEST_CASE("Dt3Cpu")
         };
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 2.0});
         // Validation:
-        const auto& [lineAngle, feature] = *closestOrientation(featuremap.getDt3Map(), scene);
+        const auto& angleIdx = closestOrientationIndex(featuremap.getDt3Map().sortedAngles, scene);
+        const auto& feature = featuremap.getDt3Map().features[angleIdx];
         REQUIRE(allClose(feature.row(int(feature.rows()/2)), Eigen::Array<float, 1, 7>{2,3,3,3,3,3,4}, 0.0, 1e-5));
     }
     SECTION("buildCpuFeaturemap: precision + scaling distance")
@@ -340,7 +340,8 @@ TEST_CASE("Dt3Cpu")
         scene *= distanceScale;
         const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 2.0});
         // Validation:
-        const auto& [lineAngle, feature] = *closestOrientation(featuremap.getDt3Map(), scene);
+        const auto& angleIdx = closestOrientationIndex(featuremap.getDt3Map().sortedAngles, scene);
+        const auto& feature = featuremap.getDt3Map().features[angleIdx];
         REQUIRE(allClose(feature.row(int(feature.rows()/2)), Eigen::Array<float, 1, 13>{3,5,6,6,6,6,6,6,6,6,7,9,12}, 0.0, 1e-5));
     }
 }
