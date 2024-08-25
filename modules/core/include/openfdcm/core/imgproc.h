@@ -36,10 +36,18 @@ namespace openfdcm::core
      * @param lineAngle The integration lineAngle
      */
     template<typename Derived>
-    inline void lineIntegral(Eigen::DenseBase<Derived>& img, float const& lineAngle) noexcept
+    inline void lineIntegral(Eigen::DenseBase<Derived>& img, float  lineAngle) noexcept
     {
         using T = typename Derived::Scalar;
-        Point2 const& rastvec = rasterizeVector(Point2{std::cos(lineAngle), std::sin(lineAngle)});
+        Point2 rastvec = rasterizeVector(Point2{std::cos(lineAngle), std::sin(lineAngle)});
+
+        bool transposed{false};
+        if (std::abs(rastvec.y()) == 1)
+        {
+            transposed = true;
+            img = img.transpose().eval();
+            rastvec = Point2{-rastvec.y(), -rastvec.x()};
+        }
 
         Eigen::Array<long, 2, 1> p0{0, 0};
         if (rastvec.x() < 0)
@@ -47,40 +55,21 @@ namespace openfdcm::core
         if (rastvec.y() < 0)
             p0.y() += img.rows() - 1;
 
-        if (std::abs(rastvec.x()) == 1)
-        {   // Colwise
-            Eigen::Index previous_p1x{p0.x()};
-            for (Eigen::Index i{1}; i < img.cols(); ++i)
-            {
-                Eigen::Array<Eigen::Index, 2, 1> const p1{
-                        p0.x() + i * Eigen::Index(rastvec.x()),
-                        static_cast<Eigen::Index>(std::round(i * rastvec.y())) - static_cast<Eigen::Index>(std::round((i - 1) * rastvec.y()))
-                };
-                Eigen::Index const y1 = std::max(p1.y(), Eigen::Index(0));
-                Eigen::Index const y2 = std::max(-p1.y(), Eigen::Index(0));
-                Eigen::Index const col_len = img.rows() - std::abs(p1.y());
-                img.block(y1, p1.x(), col_len, 1) += img.block(y2, previous_p1x, col_len, 1);
-                previous_p1x = p1.x();
-            }
+        Eigen::Index previous_p1x{p0.x()};
+        for (Eigen::Index i{1}; i < img.cols(); ++i)
+        {
+            Eigen::Array<Eigen::Index, 2, 1> const p1{
+                    p0.x() + i * Eigen::Index(rastvec.x()),
+                    static_cast<Eigen::Index>(std::round(i * rastvec.y())) - static_cast<Eigen::Index>(std::round((i - 1) * rastvec.y()))
+            };
+            Eigen::Index const y1 = std::max(p1.y(), Eigen::Index(0));
+            Eigen::Index const y2 = std::max(-p1.y(), Eigen::Index(0));
+            Eigen::Index const col_len = img.rows() - std::abs(p1.y());
+            img.block(y1, p1.x(), col_len, 1) += img.block(y2, previous_p1x, col_len, 1);
+            previous_p1x = p1.x();
         }
-        else if (std::abs(rastvec.y()) == 1)
-        {   // Rowwise
-            Eigen::Array<T, -1, -1, Eigen::RowMajor> rowmaj_img = img;
-            Eigen::Index previous_p1y{p0.y()};
-            for (Eigen::Index i{1}; i < img.rows(); ++i)
-            {
-                Eigen::Array<Eigen::Index, 2, 1> const p1{
-                        static_cast<Eigen::Index>(std::round(i * rastvec.x())) - static_cast<Eigen::Index>(std::round((i - 1) * rastvec.x())),
-                        p0.y() + i * Eigen::Index(rastvec.y())
-                };
-                Eigen::Index const x1 = std::max(p1.x(), Eigen::Index(0));
-                Eigen::Index const x2 = std::max(-p1.x(), Eigen::Index(0));
-                Eigen::Index const row_len = img.cols() - std::abs(p1.x());
-                rowmaj_img.block(p1.y(), x1, 1, row_len) += rowmaj_img.block(previous_p1y, x2, 1, row_len);
-                previous_p1y = p1.y();
-            }
-            img = rowmaj_img;
-        }
+        if (transposed)
+            img = img.transpose().eval();
     }
 
     /**
