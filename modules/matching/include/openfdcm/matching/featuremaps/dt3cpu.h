@@ -186,14 +186,10 @@ namespace openfdcm::matching {
 
         // Step 3: Build featuremap with distance transform
         Dt3CpuMap<float> dt3map{std::vector<core::RawImage<float>>(sortedAngles.size()), sortedAngles};
-        std::mutex dt3map_mutex;  // Mutex to protect access to dt3map
 
         auto func = [&](size_t angleIdx) {
             core::RawImage<float> distance_transformed =
                     core::distanceTransform<float, D>(translatedScene(Eigen::all, indices.at(angleIdx)), sceneShift.sceneSize);
-
-            // Lock the mutex to safely update dt3map
-            std::lock_guard<std::mutex> lock(dt3map_mutex);
             dt3map.features[angleIdx] = std::move(distance_transformed);
         };
 
