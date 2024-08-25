@@ -189,7 +189,7 @@ namespace openfdcm::core
     * @param coeff The propagation coefficient
     */
     template<typename T>
-    void propagateOrientation(std::vector<RawImage<T>>& featuremap, std::vector<float>& angles, float coeff) noexcept
+    inline void propagateOrientation(std::vector<RawImage<T>>& featuremap, std::vector<float>& angles, float coeff) noexcept
     {
         assert(featuremap.size() == angles.size());
 
