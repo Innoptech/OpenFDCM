@@ -65,6 +65,8 @@ namespace openfdcm::core
     using Line = Eigen::Vector<float, 4>; // x1, y1, x2, y2
     using LineArray = Eigen::Matrix<float, 4, -1>;
 
+    template <typename T>
+    concept IsEigen = std::is_base_of_v<Eigen::EigenBase<std::decay_t<T>>, std::decay_t<T>>;
 
     /**
     * @brief Sort the indices of a vector.
@@ -103,7 +105,7 @@ namespace openfdcm::core
     * @param vec The vector to sort
     * @return The indices of the sorted array
     */
-    template<typename Derived, typename Compare>
+    template<IsEigen Derived, typename Compare>
     inline std::vector<long> argsort(
             Eigen::DenseBase<Derived> const& vec, Compare comp) noexcept
     {
@@ -121,7 +123,7 @@ namespace openfdcm::core
     * @param vec The vector to sort
     * @return The indices of the sorted array
     */
-    template<typename Derived, typename Compare>
+    template<IsEigen Derived, typename Compare>
     inline std::vector<long> argsort(Eigen::DenseBase<Derived> const& vec) noexcept
     {
         return argsort(vec, std::less<>());
@@ -134,7 +136,7 @@ namespace openfdcm::core
      * @param value The value to search for
      * @return The index of the closest value in the given sorted vector
      */
-    template<typename Derived, class Compare>
+    template<IsEigen Derived, class Compare>
     inline size_t binarySearch(Eigen::DenseBase<Derived> const& sorted_vec,
                                typename Derived::RealScalar const value, Compare comp) noexcept {
         static_assert(Derived::RowsAtCompileTime == 1 or Derived::ColsAtCompileTime == 1);
@@ -152,7 +154,7 @@ namespace openfdcm::core
      * @param value The value to search for
      * @return The index of the closest value in the given sorted vector
      */
-    template<typename Derived>
+    template<IsEigen Derived>
     inline size_t binarySearch(Eigen::DenseBase<Derived> const& sorted_vec,
                                typename Derived::RealScalar const value) noexcept {
         return binarySearch(sorted_vec, value, std::less{});
@@ -199,7 +201,7 @@ namespace openfdcm::core
      * @param atol The absolute tolerance parameter
      * @return true if two arrays are element-wise equal within a tolerance.
      */
-    template<typename DerivedA, typename DerivedB>
+    template<IsEigen DerivedA, IsEigen DerivedB>
     inline bool allClose(DenseBase<DerivedA> const& a, DenseBase<DerivedB> const& b,
                          typename DerivedA::RealScalar const& rtol = static_cast<DerivedA::RealScalar>(0.0),
                          typename DerivedA::RealScalar const& atol = static_cast<DerivedA::RealScalar>(1e-5)) noexcept
@@ -228,7 +230,7 @@ namespace openfdcm::core
      * @param x The angle in radians
      * @return The constrained array of angles in radians
      */
-    template<typename Derived>
+    template<IsEigen Derived>
     inline auto constrainHalfAngle(DenseBase<Derived> const& x) noexcept(false)
     {
         return x.unaryExpr([](auto const& elem) { return constrainHalfAngle(elem); });
@@ -254,7 +256,7 @@ namespace openfdcm::core
      * @param x The angle in radians
      * @return The constrained array of angles in radians
      */
-    template<typename Derived>
+    template<IsEigen Derived>
     inline auto constrainAngle(DenseBase<Derived> const& x) noexcept(false)
     {
         return x.unaryExpr([](auto const& elem) { return constrainAngle(elem); });

@@ -177,7 +177,8 @@ namespace openfdcm::matching
             score.emplace_back(translations[tmplIdx].size());
         }
 
-        core::cuda::copyToCpu(Eigen::Map<Eigen::Vector<float,-1>>(score.data()->data(), transSize), cuScores);
+        Eigen::Map<Eigen::Vector<float,-1>> scoresMap(score.data()->data(), transSize);
+        core::cuda::copyToCpu(scoresMap, cuScores);
         return score;
     }
 }

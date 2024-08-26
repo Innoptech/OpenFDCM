@@ -34,17 +34,27 @@ namespace openfdcm::core::cuda {
 
     static constexpr long Dynamic = -1;
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCuda(DerivedCuda& cudaArray, DerivedCpu const& cpuArray);
+    template<typename Derived> class CudaArrayBase;
+    template <typename T> concept IsCuda = std::derived_from<std::decay_t<T>, CudaArrayBase<std::decay_t<T>>>;
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCpu(DerivedCpu&& cpuArray, DerivedCuda const& cudaArray);
+    template <IsCuda DerivedCuda, IsEigen DerivedCpu>
+    __host__ inline void copyToCuda(CudaArrayBase<DerivedCuda>& cudaArray, DenseBase<DerivedCpu> const& cpuArray);
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCudaAsync(DerivedCuda& cudaArray, DerivedCpu const& cpuArray, const CudaStreamPtr &stream);
+    template <IsEigen DerivedCpu, IsCuda DerivedCuda>
+    __host__ inline void copyToCpu(DenseBase<DerivedCpu>& cpuArray, CudaArrayBase<DerivedCuda> const& cudaArray);
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCpuAsync(DerivedCpu& cpuArray, DerivedCuda const& cudaArray, const CudaStreamPtr &stream);
+    template <IsCuda DerivedCuda>
+    __host__ inline Eigen::Array<
+            typename DerivedCuda::Scalar, DerivedCuda::RowsAtCompileTime, DerivedCuda::ColsAtCompileTime>
+    copyToCpu(CudaArrayBase<DerivedCuda> const& cudaArray);
+
+    template <IsCuda DerivedCuda, IsEigen DerivedCpu>
+    __host__ inline void copyToCudaAsync(CudaArrayBase<DerivedCuda>& cudaArray, DenseBase<DerivedCpu> const& cpuArray,
+                                         const CudaStreamPtr &stream);
+
+    template <IsEigen DerivedCpu, IsCuda DerivedCuda>
+    __host__ inline void copyToCpuAsync(DenseBase<DerivedCpu>& cpuArray, CudaArrayBase<DerivedCuda> const& cudaArray,
+                                        const CudaStreamPtr &stream);
 
     /**
      * @brief Base class for all CUDA array-like structures using CRTP.
@@ -66,8 +76,9 @@ namespace openfdcm::core::cuda {
         const Derived& derived() const { return static_cast<const Derived&>(*this); }
 
         // Common API to access array size
-        __host__ __device__
-        long size() const noexcept { return derived().size(); }
+        __host__ __device__ auto size() const noexcept { return derived().size(); }
+        __host__ __device__ auto cols() const noexcept { return derived().cols(); }
+        __host__ __device__ auto rows() const noexcept { return derived().rows(); }
 
         // Accessor: Get value at (row, col)
         __host__ __device__
@@ -78,6 +89,9 @@ namespace openfdcm::core::cuda {
 
         __host__ __device__
         auto* getArray() noexcept { return derived().getArray(); }
+
+        __host__ __device__
+        const auto* getArray() const { return derived().getArray(); }
     };
 
 
@@ -266,11 +280,6 @@ namespace openfdcm::core::cuda {
     -> CudaArray<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime>;
 
     template<typename T, long Size> using cuVector = CudaArray<T, Size, 1>;
-    using cuSize = cuVector<size_t, 2>;
-    using cuPoint2 = cuVector<float, 2>;
-    using cuMat22 = CudaArray<float, 2, 2>;
-    using cuMat23 = CudaArray<float, 2, 3>;
-    using cuLine = CudaArray<float, 4, 1>; // x1, y1, x2, y2
     using cuLineArray = CudaArray<float, 4, -1>;
 
     //---------------------------------------------------------------------------------------------------
@@ -383,10 +392,11 @@ namespace openfdcm::core::cuda {
         return array.transpose(stream);
     }
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCuda(DerivedCuda& cudaArray, DerivedCpu const& cpuArray)
+    template <IsCuda DerivedCuda, IsEigen DerivedCpu>
+    __host__ inline void copyToCuda(CudaArrayBase<DerivedCuda>& cudaArray, DenseBase<DerivedCpu> const& cpuArray)
     {
-        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>);
+        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>,
+                "Scalar types in DerivedCuda and DerivedCpu must match");
         if constexpr (!isDynamic<DerivedCuda> && !isDynamic<DerivedCpu>) {
             static_assert(DerivedCuda::Rows == DerivedCpu::Rows && DerivedCuda::Cols == DerivedCpu::Cols);
         } else {
@@ -403,29 +413,48 @@ namespace openfdcm::core::cuda {
         }
     }
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCpu(DerivedCpu&& cpuArray, DerivedCuda const& cudaArray)
+    template <IsEigen DerivedCpu, IsCuda DerivedCuda>
+    __host__ inline void copyToCpu(DenseBase<DerivedCpu>& cpuArray, CudaArrayBase<DerivedCuda> const& cudaArray)
     {
-        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>);
+        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>,
+                "Scalar types in DerivedCuda and DerivedCpu must match");
+
         if constexpr (!isDynamic<DerivedCuda> && !isDynamic<DerivedCpu>()) {
             static_assert(DerivedCuda::Rows == DerivedCpu::Rows && DerivedCuda::Cols == DerivedCpu::Cols);
         } else {
             assert(cudaArray.rows() == cpuArray.rows() && cudaArray.cols() == cpuArray.cols());
         }
 
+        // Use std::forward to handle both lvalue and rvalue references correctly
         cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cpuArray.derived().data()),
                                             reinterpret_cast<const void*>(cudaArray.getArray()),
-                                            cudaArray.size() *  sizeof(typename DerivedCpu::Scalar),
+                                            cudaArray.size() * sizeof(typename DerivedCpu::Scalar),
                                             cudaMemcpyDeviceToHost);
+
         if (cudaStatus != cudaSuccess) {
             throw std::runtime_error{"cudaMemcpy failed: " + std::string(cudaGetErrorString(cudaStatus))};
         }
     }
 
-    template <typename DerivedCuda, typename DerivedCpu>
-    __host__ inline void copyToCudaAsync(DerivedCuda& cudaArray, DerivedCpu const& cpuArray, const CudaStreamPtr &stream)
+    template <IsCuda DerivedCuda>
+    __host__ inline Eigen::Array<
+            typename DerivedCuda::Scalar, DerivedCuda::RowsAtCompileTime, DerivedCuda::ColsAtCompileTime>
+            copyToCpu(CudaArrayBase<DerivedCuda> const& cudaArray)
     {
-        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>);
+        Eigen::Array<typename DerivedCuda::Scalar, DerivedCuda::RowsAtCompileTime, DerivedCuda::ColsAtCompileTime> cpuArray;
+        if constexpr (DerivedCuda::RowsAtCompileTime == Eigen::Dynamic || DerivedCuda::ColsAtCompileTime == Eigen::Dynamic) {
+            cpuArray.resize(cudaArray.rows(), cudaArray.cols());
+        }
+        copyToCpu(cpuArray, cudaArray);
+        return cpuArray;
+    }
+
+    template <IsCuda DerivedCuda, IsEigen DerivedCpu>
+    __host__ inline void copyToCudaAsync(CudaArrayBase<DerivedCuda>& cudaArray, DenseBase<DerivedCpu> const& cpuArray,
+                                         const CudaStreamPtr &stream)
+    {
+        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>,
+                "Scalar types in DerivedCuda and DerivedCpu must match");
         if constexpr (!isDynamic<DerivedCuda> && !isDynamic<DerivedCpu>) {
             static_assert(DerivedCuda::Rows == DerivedCpu::Rows && DerivedCuda::Cols == DerivedCpu::Cols);
         } else {
@@ -440,11 +469,13 @@ namespace openfdcm::core::cuda {
         }
     }
 
-    template <typename DerivedCuda, typename DerivedCpu>
+    template <IsEigen DerivedCpu, IsCuda DerivedCuda>
     __host__
-    inline void copyToCpuAsync(DerivedCpu& cpuArray, DerivedCuda const& cudaArray, const CudaStreamPtr &stream)
+    inline void copyToCpuAsync(DenseBase<DerivedCpu>& cpuArray, CudaArrayBase<DerivedCuda> const& cudaArray,
+                               const CudaStreamPtr &stream)
     {
-        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>);
+        static_assert(std::is_same_v<typename DerivedCuda::Scalar, typename DerivedCpu::Scalar>,
+                "Scalar types in DerivedCuda and DerivedCpu must match");
         if constexpr (!isDynamic<DerivedCuda> && !isDynamic<DerivedCpu>) {
             static_assert(DerivedCuda::Rows == DerivedCpu::Rows && DerivedCuda::Cols == DerivedCpu::Cols);
         } else {
