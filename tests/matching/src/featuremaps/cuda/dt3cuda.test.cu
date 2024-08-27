@@ -20,41 +20,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
- */
+*/
 
 #include <catch2/catch_test_macros.hpp>
-#include "openfdcm/core/serialization.h"
+#include <catch2/matchers/catch_matchers_vector.hpp>
+#include "openfdcm/matching/featuremaps/cuda/dt3cuda.cuh"
 #include "test-utils/utils.h"
 
-using namespace openfdcm::core;
-
-namespace TestConfig {
-    static const int linecount = 100;
-    static const Size size({300, 200});
-}
-
-
-TEST_CASE( "serialize", "[openfdcm::core]")
-{
-    SECTION("serializeLines & deserializeLines")
-    {
-        const LineArray& original_lines = tests::createLines(
-                TestConfig::linecount, std::min(TestConfig::size.x(), TestConfig::size.y()));
-
-        std::stringstream ss;
-        packio::serialize(original_lines, ss);
-
-        const LineArray& restituted_lines = packio::deserialize<LineArray>(ss);
-        REQUIRE(allClose(original_lines, restituted_lines));
-    }
-
-    SECTION("read & write")
-    {
-        const LineArray& original_lines = tests::createLines(
-                TestConfig::linecount, std::min(TestConfig::size.x(), TestConfig::size.y()));
-        write("serialization_test.test", original_lines);
-        const LineArray& expected_lines = read("serialization_test.test");
-        REQUIRE(allClose(original_lines, expected_lines));
-    }
-}
-
+using namespace openfdcm;
+using namespace openfdcm::matching::cuda;
+using namespace openfdcm::matching::detail;

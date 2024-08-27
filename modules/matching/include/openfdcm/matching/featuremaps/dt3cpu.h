@@ -170,11 +170,19 @@ namespace openfdcm::matching {
 
         // Step 3: Build featuremap with distance transform
         Dt3CpuMap<float> dt3map{std::vector<core::RawImage<float>>(sortedAngles.size()), sortedAngles};
+        auto const& size = sceneShift.sceneSize;
 
         auto func = [&](size_t angleIdx) {
-            core::RawImage<float> distance_transformed =
-                    core::distanceTransform<float, D>(translatedScene(Eigen::all, indices.at(angleIdx)), sceneShift.sceneSize);
-            dt3map.features[angleIdx] = std::move(distance_transformed);
+            Eigen::Matrix<float, 4, Eigen::Dynamic> sceneLinesSelection =
+                    translatedScene(Eigen::all, indices.at(angleIdx)).eval();
+            if(sceneLinesSelection.cols() > 0)
+            {
+                auto colmaj_img = core::RawImage<float>::Constant(
+                        size.y(), size.x(), std::numeric_limits<float>::max()).eval();
+                core::drawLines(colmaj_img, sceneLinesSelection, static_cast<float>(0));
+                core::distanceTransform<float, D>(colmaj_img, sceneLinesSelection);
+                dt3map.features[angleIdx] = std::move(colmaj_img);
+            }
         };
 
         if (pool_ptr) {

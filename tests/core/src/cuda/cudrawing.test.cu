@@ -20,41 +20,38 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
- */
+*/
 
 #include <catch2/catch_test_macros.hpp>
-#include "openfdcm/core/serialization.h"
+#include <catch2/matchers/catch_matchers_vector.hpp>
+#include "openfdcm/core/cuda/cudrawing.cuh"
 #include "test-utils/utils.h"
 
-using namespace openfdcm::core;
+using namespace openfdcm;
 
-namespace TestConfig {
-    static const int linecount = 100;
-    static const Size size({300, 200});
-}
-
-
-TEST_CASE( "serialize", "[openfdcm::core]")
+TEST_CASE("cudrawing", "[openfdcm::core::cuda, Dt3Cuda]")
 {
-    SECTION("serializeLines & deserializeLines")
-    {
-        const LineArray& original_lines = tests::createLines(
-                TestConfig::linecount, std::min(TestConfig::size.x(), TestConfig::size.y()));
+    int const size{10};
+    float minVal{0.f}, maxVal{1.f};
+    auto cudaStream = std::make_unique<core::cuda::CudaStream>();
+    core::cuda::CudaArray<float,-1,-1> d_img(size, size);
 
-        std::stringstream ss;
-        packio::serialize(original_lines, ss);
-
-        const LineArray& restituted_lines = packio::deserialize<LineArray>(ss);
-        REQUIRE(allClose(original_lines, restituted_lines));
+    core::LineArray cpuScene(4,size/2);
+    for(int row{0}; row < size; row+=2) {
+        // Draw all even horizontal lines x1, y1, x2, y2
+        cpuScene.block<4,1>(0,row/2) = core::Line{0,static_cast<float>(row), size-1, static_cast<float>(row)};
     }
+    core::cuda::CudaArray cuScene(cpuScene);
 
-    SECTION("read & write")
-    {
-        const LineArray& original_lines = tests::createLines(
-                TestConfig::linecount, std::min(TestConfig::size.x(), TestConfig::size.y()));
-        write("serialization_test.test", original_lines);
-        const LineArray& expected_lines = read("serialization_test.test");
-        REQUIRE(allClose(original_lines, expected_lines));
+    // Draw maxVal on minVal
+    setAll(d_img, minVal, cudaStream);
+    drawLines(d_img, cuScene, maxVal, cudaStream);
+    core::cuda::drawCudaFeature("draw.pgm", d_img, maxVal, cudaStream);
+
+    auto const& cpufeature = core::cuda::copyToCpu(d_img);
+
+    for(int row{0}; row < size; ++row) {
+        auto expectedValue = (row % 2) ? minVal : maxVal;
+        REQUIRE(cpufeature.block(row, 0, 1, size).isApprox(Eigen::ArrayXXf::Constant(1, size, expectedValue)));
     }
 }
-

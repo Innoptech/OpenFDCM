@@ -31,7 +31,7 @@ using namespace openfdcm::core;
 using namespace openfdcm::matching;
 using namespace openfdcm::matching::detail;
 
-TEST_CASE("getSceneCenteredTranslation")
+TEST_CASE("getSceneCenteredTranslation", "[openfdcm::matching]")
 {
     SECTION("Centered scene")
     {
@@ -224,7 +224,7 @@ TEST_CASE("minmaxTranslation", "[dt3cpu]")
 }
 
 
-TEST_CASE("Dt3Cpu")
+TEST_CASE("Dt3Cpu", "[openfdcm::matching]")
 {
     SECTION("closestOrientation")
     {
@@ -273,9 +273,8 @@ TEST_CASE("Dt3Cpu")
             features[angleIdx] = RawImage<float>::Constant(featuresize.y(), featuresize.x(), INFINITY);
 
         Dt3CpuMap<float> featuremap{features, sortedAngles};
-        RawImage<float> const& img = distanceTransform<float>(linearray, featuresize);
+        distanceTransform(featuremap.features[0], linearray);
 
-        featuremap.features[0] = img;
         propagateOrientation(featuremap.features, featuremap.sortedAngles, coeff);
 
         auto feature1 = featuremap.features[0];

@@ -108,8 +108,9 @@ namespace openfdcm::core
      * @param linearray The array of lines to draw
      * @param color The greyscale color to draw
      */
-    template<typename Derived, typename U>
-    inline void drawLines(Eigen::DenseBase<Derived>& img, LineArray const& linearray, U const color) noexcept(false)
+    template<typename Derived>
+    inline void drawLines(Eigen::DenseBase<Derived>& img, LineArray const& linearray,
+                          typename Derived::Scalar const color) noexcept(false)
     {
         if (linearray.cols() == 0) return;
 
@@ -120,7 +121,7 @@ namespace openfdcm::core
         {
             Eigen::Matrix<Eigen::Index, 2, -1> const& rasterization = rasterizeLine(line);
             for ( auto const& pt : rasterization.colwise())
-                img(pt.y(), pt.x()) = (typename Derived::Scalar)color;
+                img(pt.y(), pt.x()) = color;
         }
     }
 } // namespace openfdcm::core

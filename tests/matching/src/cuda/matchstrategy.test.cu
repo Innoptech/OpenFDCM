@@ -29,35 +29,8 @@ SOFTWARE.
 #include "openfdcm/matching/optimizestrategies/defaultoptimize.h"
 #include "openfdcm/matching/featuremaps/cuda/dt3cuda.cuh"
 
-#include "fstream"
-
 using namespace openfdcm;
 using namespace openfdcm::matching::cuda;
-
-void savePGM(const std::string& filename, const unsigned char* image, int width, int height) {
-    // Open the file in binary mode
-    std::ofstream file(filename, std::ios::out | std::ios::binary);
-
-    if (!file.is_open()) {
-        std::cerr << "Error opening file: " << filename << std::endl;
-        return;
-    }
-
-    // Write the PGM header
-    file << "P5\n" << width << " " << height << "\n255\n";
-
-    // Write the image data
-    file.write(reinterpret_cast<const char*>(image), width * height);
-
-    // Close the file
-    file.close();
-}
-
-template <typename Derived, typename Scalar = Derived::Scalar>
-auto clip(const Eigen::DenseBase<Derived>& v, Scalar min, Scalar max)
-{
-    return v.derived().min(max).max(min);
-}
 
 void run_cuda_test(float scene_ratio, BS::concurrency_t num_threads) {
     size_t const max_tmpl_lines{3}, max_scene_lines{3};
@@ -72,7 +45,7 @@ void run_cuda_test(float scene_ratio, BS::concurrency_t num_threads) {
     matching::DefaultOptimize optimizerStrategy{threadpool};
     matching::DefaultMatch matcher{};
     size_t const numberOfLines{10};
-    size_t const lineLength{10};
+    size_t const lineLength{100};
     core::LineArray tmpl = tests::createLines(numberOfLines, lineLength);
 
     // Test for rotation
@@ -153,7 +126,7 @@ void run_cuda_test(float scene_ratio, BS::concurrency_t num_threads) {
     }
 }
 
-TEST_CASE("DefaultMatch on cuda dt3") {
+TEST_CASE("DefaultMatch on cuda dt3", "[openfdcm::matching::cuda]") {
     run_cuda_test(1.0f, 1);
     run_cuda_test(1.0f, 2);
 }

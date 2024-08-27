@@ -28,7 +28,7 @@ SOFTWARE.
 
 using namespace openfdcm::core;
 
-TEST_CASE( "Operation on vectors and arrays" )
+TEST_CASE( "Operation on vectors and arrays", "[openfdcm::core]")
 {
     SECTION("argsort on vector")
     {
@@ -62,7 +62,7 @@ TEST_CASE( "Operation on vectors and arrays" )
     }
 
 }
-TEST_CASE( "Operation on angles" )
+TEST_CASE( "Operation on angles", "[openfdcm::core]")
 {
     SECTION("constrainAngle")
     {
@@ -79,7 +79,7 @@ TEST_CASE( "Operation on angles" )
         REQUIRE(allClose(constrained_angles2, Eigen::Vector4d{0.0, M_PI_4, M_PI_4, 0.0}, 0.0, 1e-10));
     }
 }
-TEST_CASE( "Operation on lines")
+TEST_CASE( "Operation on lines", "[openfdcm::core]")
 {
     const LineArray linearray{
             {0, 0, -1},
@@ -128,7 +128,7 @@ TEST_CASE( "Operation on lines")
     }
 }
 
-TEST_CASE("transform lines")
+TEST_CASE("transform lines", "[openfdcm::core]")
 {
     SECTION("transform")
     {
@@ -248,7 +248,7 @@ TEST_CASE("transform lines")
     }
 }
 
-TEST_CASE("matching::rasterizeVector")
+TEST_CASE("matching::rasterizeVector", "[openfdcm::core]")
 {
     Point2 const vec{2.f,0.f};
     float const eps{M_PI/12};

@@ -28,7 +28,7 @@ SOFTWARE.
 using namespace openfdcm::core;
 
 
-TEST_CASE("Cropping line segments based on Box", "[clipLines]") {
+TEST_CASE("Cropping line segments based on Box", "[openfdcm::core, clipLines]") {
     Box Box{0.0f, 10.0f, 0.0f, 10.0f}; // Define a Box for testing
 
     SECTION("Completely inside Box")

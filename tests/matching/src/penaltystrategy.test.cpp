@@ -32,7 +32,7 @@ using namespace openfdcm::core;
 using namespace openfdcm::matching;
 
 
-TEMPLATE_TEST_CASE("PenaltyStrategy Test", "[penalty]", DefaultPenalty, ExponentialPenalty)
+TEMPLATE_TEST_CASE("PenaltyStrategy Test", "[openfdcm::matching, penalty]", DefaultPenalty, ExponentialPenalty)
 {
     using PenaltyType = TestType;
 
@@ -72,7 +72,7 @@ TEMPLATE_TEST_CASE("PenaltyStrategy Test", "[penalty]", DefaultPenalty, Exponent
 }
 
 
-TEST_CASE("Validate penalty")
+TEST_CASE("Validate penalty", "[openfdcm::matching]")
 {
     SECTION("DefaultPenalty")
     {

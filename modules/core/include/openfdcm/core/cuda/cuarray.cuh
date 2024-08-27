@@ -35,10 +35,16 @@ namespace openfdcm::core::cuda {
     static constexpr long Dynamic = -1;
 
     template<typename Derived> class CudaArrayBase;
+    template <typename T, long Rows, long Cols> class CudaArray;
     template <typename T> concept IsCuda = std::derived_from<std::decay_t<T>, CudaArrayBase<std::decay_t<T>>>;
 
     template <IsCuda DerivedCuda, IsEigen DerivedCpu>
     __host__ inline void copyToCuda(CudaArrayBase<DerivedCuda>& cudaArray, DenseBase<DerivedCpu> const& cpuArray);
+
+    template <IsEigen DerivedCpu>
+    __host__ inline CudaArray<
+            typename DerivedCpu::Scalar, DerivedCpu::RowsAtCompileTime, DerivedCpu::ColsAtCompileTime>
+    copyToCuda(DenseBase<DerivedCpu> const& cpuArray);
 
     template <IsEigen DerivedCpu, IsCuda DerivedCuda>
     __host__ inline void copyToCpu(DenseBase<DerivedCpu>& cpuArray, CudaArrayBase<DerivedCuda> const& cudaArray);
@@ -86,12 +92,6 @@ namespace openfdcm::core::cuda {
 
         __host__ __device__
         const auto& operator()(long row, long col) const noexcept { return derived()(row, col); }
-
-        __host__ __device__
-        auto* getArray() noexcept { return derived().getArray(); }
-
-        __host__ __device__
-        const auto* getArray() const { return derived().getArray(); }
     };
 
 
@@ -188,6 +188,19 @@ namespace openfdcm::core::cuda {
             }
         }
 
+        template<typename Derived>
+        CudaArray(Eigen::DenseBase<Derived> const& eigenCpuArray)
+                : CudaArray{eigenCpuArray.rows(), eigenCpuArray.cols()}
+        {
+            cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cuda_array_),
+                                                reinterpret_cast<const void*>(eigenCpuArray.derived().data()),
+                                                eigenCpuArray.rows() * eigenCpuArray.cols() * sizeof(T),
+                                                cudaMemcpyHostToDevice);
+            if (cudaStatus != cudaSuccess) {
+                throw std::runtime_error{"cudaMemcpy failed: " + std::string(cudaGetErrorString(cudaStatus))};
+            }
+        }
+
         template <long R = Rows, long C = Cols,
                 typename std::enable_if<(R == 1 || C == 1) && !(R == 0 && C == 0), long>::type = 0>
         CudaArray(T const* data, long size)
@@ -248,8 +261,47 @@ namespace openfdcm::core::cuda {
         __host__ __device__ auto rows() const noexcept { return rows_; }
 
         // Raw device array access
-        __host__ __device__ T* getArray() const noexcept { return cuda_array_; }
-        __host__ __device__ T* getTmpArray() const noexcept { return tmp_cuda_array_; }
+        __host__ __device__ T* data() const noexcept { return cuda_array_; }
+        __host__ __device__ T* dataTmp() const noexcept { return tmp_cuda_array_; }
+
+        // Only allow resize for dynamic arrays
+        template <long R = Rows, long C = Cols,
+                typename std::enable_if<(R == core::cuda::Dynamic || C == core::cuda::Dynamic), int>::type = 0>
+        void resize(long new_rows, long new_cols)
+        {
+            if (new_rows == rows_ && new_cols == cols_) {
+                return;
+            }
+
+            if constexpr (R != core::cuda::Dynamic){
+                assert(new_rows == R);
+            }
+            if constexpr (C != core::cuda::Dynamic){
+                assert(new_rows == C);
+            }
+
+            freeArray(cuda_array_);
+            freeArray(tmp_cuda_array_);
+            cuda_array_ = allocateArray(new_rows * new_cols);
+            tmp_cuda_array_ = allocateArray(new_rows * new_cols);
+            rows_ = new_rows;
+            cols_ = new_cols;
+        }
+
+        // Overload for 1D arrays when either Rows == 1 or Cols == 1
+        template <long R = Rows, long C = Cols, typename std::enable_if<(R == 1 || C == 1), int>::type = 0>
+        void resize(long new_size){
+            resize((Rows == 1) ? 1 : new_size, (Cols == 1) ? 1 : new_size);
+        }
+
+        // Delete resize for fixed-size arrays
+        template <long R = Rows, long C = Cols,
+                typename std::enable_if<(R != core::cuda::Dynamic && C != core::cuda::Dynamic), int>::type = 0>
+        void resize(long, long) = delete;
+
+        template <long R = Rows, long C = Cols,
+                typename std::enable_if<(R != core::cuda::Dynamic && C != core::cuda::Dynamic), int>::type = 0>
+        void resize(long) = delete;
 
         __device__
         T& operator()(long row, long col) noexcept { return cuda_array_[row + col * rows_]; }
@@ -268,10 +320,10 @@ namespace openfdcm::core::cuda {
         __host__ void transpose(const CudaStreamPtr &stream);
     };
 
-    template <typename DerivedArray>
+    template <typename DerivedCuda>
     static constexpr bool isDynamic() noexcept {
-        return (DerivedArray::RowsAtCompileTime == core::cuda::Dynamic || 
-        DerivedArray::ColsAtCompileTime == core::cuda::Dynamic);
+        return (DerivedCuda::RowsAtCompileTime == core::cuda::Dynamic || 
+        DerivedCuda::ColsAtCompileTime == core::cuda::Dynamic);
     }
 
     // Deduction guide for constructing CudaArray from Eigen matrix (Eigen::Matrix or Eigen::Array)
@@ -314,9 +366,9 @@ namespace openfdcm::core::cuda {
         }
     }
 
-    template <typename DerivedArray>
+    template <typename DerivedCuda> requires (std::is_floating_point_v<typename DerivedCuda::Scalar>)
     __global__
-    void sqrtKernel(DerivedArray& d_img) {
+    void sqrtKernel(CudaArrayBase<DerivedCuda>& d_img) {
         // Calculate 2D index (x, y)
         int idx_x = blockIdx.x * blockDim.x + threadIdx.x;
         int idx_y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -327,9 +379,22 @@ namespace openfdcm::core::cuda {
         }
     }
 
-    template <typename DerivedArray>
+    template <typename DerivedCuda>
     __global__
-    void setAllKernel(DerivedArray& d_img, typename DerivedArray::Scalar value) {
+    void powKernel(CudaArrayBase<DerivedCuda>& d_img, typename DerivedCuda::Scalar exp) {
+        // Calculate 2D index (x, y)
+        int idx_x = blockIdx.x * blockDim.x + threadIdx.x;
+        int idx_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+        // Ensure that the index is within bounds
+        if (idx_x < d_img.cols() && idx_y < d_img.rows()) {
+            d_img(idx_y, idx_x) = pow(d_img(idx_y, idx_x), exp);
+        }
+    }
+
+    template <typename DerivedCuda>
+    __global__
+    void setAllKernel(CudaArrayBase<DerivedCuda>& d_img, typename DerivedCuda::Scalar value) {
         // Calculate 2D index (x, y)
         int idx_x = blockIdx.x * blockDim.x + threadIdx.x;
         int idx_y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -344,9 +409,9 @@ namespace openfdcm::core::cuda {
     //---------------------------------------------------------------------------------------------------
     // Operations - Free functions
     //---------------------------------------------------------------------------------------------------
-    template <typename DerivedArray>
+    template <typename DerivedCuda>
     __host__
-    inline void setAll(DerivedArray& array, typename DerivedArray::Scalar value, CudaStreamPtr const& stream) {
+    inline void setAll(CudaArrayBase<DerivedCuda>& array, typename DerivedCuda::Scalar value, CudaStreamPtr const& stream) {
         dim3 threadsPerBlock(16, 16);  // Each block will have 16x16 threads
         dim3 numBlocks((array.cols() + threadsPerBlock.x - 1) / threadsPerBlock.x,
                        (array.rows() + threadsPerBlock.y - 1) / threadsPerBlock.y);
@@ -354,12 +419,23 @@ namespace openfdcm::core::cuda {
         synchronize(stream);
     }
 
-    template <typename DerivedArray>
+    template <typename DerivedCuda>
     __host__
-    inline void sqrt(DerivedArray& array, CudaStreamPtr const& stream) {
-        int threadsPerBlock = 256;
-        int blocksPerGrid = (array.size() + threadsPerBlock - 1) / threadsPerBlock;
-        sqrtKernel<<<blocksPerGrid, threadsPerBlock, 0, stream->getStream()>>>(array);
+    inline void sqrt(CudaArrayBase<DerivedCuda>& array, CudaStreamPtr const& stream) {
+        dim3 threadsPerBlock(16, 16);  // Each block will have 16x16 threads
+        dim3 numBlocks((array.cols() + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                       (array.rows() + threadsPerBlock.y - 1) / threadsPerBlock.y);
+        sqrtKernel<<<numBlocks, threadsPerBlock, 0, stream->getStream()>>>(array);
+        synchronize(stream);
+    }
+
+    template <typename DerivedCuda>
+    __host__
+    inline void pow(CudaArrayBase<DerivedCuda>& array, typename DerivedCuda::Scalar exp, CudaStreamPtr const& stream) {
+        dim3 threadsPerBlock(16, 16);  // Each block will have 16x16 threads
+        dim3 numBlocks((array.cols() + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                       (array.rows() + threadsPerBlock.y - 1) / threadsPerBlock.y);
+        powKernel<<<numBlocks, threadsPerBlock, 0, stream->getStream()>>>(array, exp);
         synchronize(stream);
     }
 
@@ -386,10 +462,10 @@ namespace openfdcm::core::cuda {
         swap(cols_, rows_);
     }
 
-    template <typename DerivedArray>
+    template <typename DerivedCuda>
     __host__
-    inline void transpose(DerivedArray& array, CudaStreamPtr const& stream) {
-        return array.transpose(stream);
+    inline void transpose(CudaArrayBase<DerivedCuda>& array, CudaStreamPtr const& stream) {
+        return array.derived().transpose(stream);
     }
 
     template <IsCuda DerivedCuda, IsEigen DerivedCpu>
@@ -404,13 +480,26 @@ namespace openfdcm::core::cuda {
         }
 
         // (void*) is absolutely necessary
-        cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cudaArray.getArray()),
+        cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cudaArray.derived().data()),
                                             reinterpret_cast<const void*>(cpuArray.derived().data()),
                                             cpuArray.size() * sizeof(typename DerivedCpu::Scalar),
                                             cudaMemcpyHostToDevice);
         if (cudaStatus != cudaSuccess) {
             throw std::runtime_error{"cudaMemcpy failed: " + std::string(cudaGetErrorString(cudaStatus))};
         }
+    }
+
+    template <IsEigen DerivedCpu>
+    __host__ inline CudaArray<
+            typename DerivedCpu::Scalar, DerivedCpu::RowsAtCompileTime, DerivedCpu::ColsAtCompileTime>
+    copyToCuda(DenseBase<DerivedCpu> const& cpuArray)
+    {
+        CudaArray<typename DerivedCpu::Scalar, DerivedCpu::RowsAtCompileTime, DerivedCpu::ColsAtCompileTime> cudaArray;
+        if constexpr (DerivedCpu::RowsAtCompileTime == Eigen::Dynamic || DerivedCpu::ColsAtCompileTime == Eigen::Dynamic) {
+            cudaArray.resize(cpuArray.rows(), cpuArray.cols());
+        }
+        copyToCuda(cudaArray, cpuArray);
+        return cpuArray;
     }
 
     template <IsEigen DerivedCpu, IsCuda DerivedCuda>
@@ -427,7 +516,7 @@ namespace openfdcm::core::cuda {
 
         // Use std::forward to handle both lvalue and rvalue references correctly
         cudaError_t cudaStatus = cudaMemcpy(reinterpret_cast<void*>(cpuArray.derived().data()),
-                                            reinterpret_cast<const void*>(cudaArray.getArray()),
+                                            reinterpret_cast<const void*>(cudaArray.derived().data()),
                                             cudaArray.size() * sizeof(typename DerivedCpu::Scalar),
                                             cudaMemcpyDeviceToHost);
 
@@ -442,7 +531,7 @@ namespace openfdcm::core::cuda {
             copyToCpu(CudaArrayBase<DerivedCuda> const& cudaArray)
     {
         Eigen::Array<typename DerivedCuda::Scalar, DerivedCuda::RowsAtCompileTime, DerivedCuda::ColsAtCompileTime> cpuArray;
-        if constexpr (DerivedCuda::RowsAtCompileTime == Eigen::Dynamic || DerivedCuda::ColsAtCompileTime == Eigen::Dynamic) {
+        if constexpr (DerivedCuda::RowsAtCompileTime == Dynamic || DerivedCuda::ColsAtCompileTime == Dynamic) {
             cpuArray.resize(cudaArray.rows(), cudaArray.cols());
         }
         copyToCpu(cpuArray, cudaArray);
@@ -460,7 +549,7 @@ namespace openfdcm::core::cuda {
         } else {
             assert(cudaArray.rows() == cpuArray.rows() && cudaArray.cols() == cpuArray.cols());
         }
-        cudaError_t cudaStatus = cudaMemcpyAsync(reinterpret_cast<void*>(cudaArray.getArray()),
+        cudaError_t cudaStatus = cudaMemcpyAsync(reinterpret_cast<void*>(cudaArray.derived().data()),
                                                  reinterpret_cast<const void*>(cpuArray.derived().data()),
                                                  cpuArray.size() * sizeof(typename DerivedCpu::Scalar),
                                                  cudaMemcpyHostToDevice, stream->getStream());
@@ -482,7 +571,7 @@ namespace openfdcm::core::cuda {
             assert(cudaArray.rows() == cpuArray.rows() && cudaArray.cols() == cpuArray.cols());
         }
         cudaError_t cudaStatus = cudaMemcpyAsync(reinterpret_cast<void*>(cpuArray.derived().data()),
-                                                 reinterpret_cast<const void*>(cudaArray.getArray()),
+                                                 reinterpret_cast<const void*>(cudaArray.derived().data()),
                                                  cudaArray.size() *  sizeof(typename DerivedCpu::Scalar),
                                                  cudaMemcpyDeviceToHost, stream->getStream());
         if (cudaStatus != cudaSuccess) {

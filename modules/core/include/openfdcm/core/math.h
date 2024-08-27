@@ -434,4 +434,39 @@ namespace openfdcm::core
     }
 } //namespace openfdcm
 
+#ifdef DEBUG
+#include <fstream>
+
+/**
+ * Clip an array with min and max values.
+ * @tparam Derived The type of the array
+ * @param v The input array to be clipped
+ * @param min The min value
+ * @param max The max value
+ * @return An Eigen expression returning the clipped array.
+ */
+template <typename Derived, typename Scalar = typename Derived::Scalar>
+inline auto clip(const Eigen::DenseBase<Derived>& v, Scalar min, Scalar max)
+{
+    return v.derived().cwiseMax(min).cwiseMin(max);
+}
+
+inline void savePGM(const std::string& filename, const unsigned char* image, int width, int height) {
+    // Open the file in binary mode
+    std::ofstream file(filename, std::ios::out | std::ios::binary);
+
+    if (!file.is_open())
+        throw std::runtime_error{"Error opening file: " + filename};
+
+    // Write the PGM header
+    file << "P5\n" << width << " " << height << "\n255\n";
+
+    // Write the image data
+    file.write(reinterpret_cast<const char*>(image), width * height);
+
+    // Close the file
+    file.close();
+}
+#endif
+
 #endif //OPENFDCM_MATH_H

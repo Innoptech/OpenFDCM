@@ -19,9 +19,9 @@ endif()
 add_executable(tests_matching ${tests_src})
 target_link_libraries(tests_matching PRIVATE openfdcm::matching Catch2::Catch2WithMain)
 target_include_directories(tests_matching PRIVATE include/ ${CMAKE_SOURCE_DIR}/tests/test-utils/include)
-catch_discover_tests(tests_matching)
 
 if(OPENFDCM_CUDA_ENABLED)
-    set(CUDA_PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-    set_target_properties(tests_matching PROPERTIES ${CUDA_PROPERTIES})
+    set_target_properties(tests_matching PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 endif()
+
+catch_discover_tests(tests_matching)

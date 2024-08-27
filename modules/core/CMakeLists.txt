@@ -30,7 +30,8 @@ configure_file(include/openfdcm/core/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/ge
 #-------------------------------------------------------------------------------
 file(GLOB_RECURSE src_files src/*.cpp)
 
-# If CUDA is enabled, append .cu files and set CUDA-specific flags
+set(CUDA_LIBS "")
+set(CUDA_INCLUDES "")
 if(OPENFDCM_CUDA_ENABLED)
     file(GLOB_RECURSE cuda_src_files src/*.cu)
     list(APPEND src_files ${cuda_src_files})
@@ -38,15 +39,25 @@ if(OPENFDCM_CUDA_ENABLED)
     # Define a macro to indicate that CUDA is enabled in the compilation
     add_definitions(-DOPENFDCM_USE_CUDA)
 
+    if (UNIX)
+        find_library(CUDART_LIBRARY cudart ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+        find_library(NPPIF_LIBRARY nppif ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+        find_library(NPPC_LIBRARY nppc ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+        find_library(NPPISU_LIBRARY nppisu ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+        find_library(CULIBOS culibos ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+    endif()
+
+    if (MSVC OR WIN32 OR MSYS)
+        set(CUDART_LIBRARY ${CUDA_LIBRARY_PATH}/cudart.lib)
+        set(NPPIF_LIBRARY ${CUDA_LIBRARY_PATH}/nppif.lib)
+        set(NPPC_LIBRARY ${CUDA_LIBRARY_PATH}/nppc.lib)
+        set(NPPISU_LIBRARY ${CUDA_LIBRARY_PATH}/nppisu.lib)
+        set(CULIBOS ${CUDA_LIBRARY_PATH}/culibos.lib)
+    endif()
+
     # Enable CUDA properties
-    set(CUDA_LIBS ${CUDA_LIBRARIES})
+    set(CUDA_LIBS ${CUDA_LIBRARIES} ${CUDART_LIBRARY} ${NPPIF_LIBRARY} ${NPPC_LIBRARY} ${NPPISU_LIBRARY} ${CULIBOS})
     set(CUDA_INCLUDES ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
-    set(CUDA_PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-else()
-    # No CUDA libraries or includes
-    set(CUDA_LIBS "")
-    set(CUDA_INCLUDES "")
-    set(CUDA_PROPERTIES "")
 endif()
 
 add_library(openfdcm_core STATIC ${src_files})
@@ -55,5 +66,5 @@ target_include_directories(openfdcm_core PUBLIC include/ ${CMAKE_CURRENT_BINARY_
 add_library(openfdcm::core ALIAS openfdcm_core)
 
 if(OPENFDCM_CUDA_ENABLED)
-    set_target_properties(openfdcm_core PROPERTIES ${CUDA_PROPERTIES})
+    set_target_properties(openfdcm_core PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 endif()

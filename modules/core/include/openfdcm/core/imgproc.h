@@ -43,9 +43,10 @@ namespace openfdcm::core
         bool transposed{false};
         if (std::abs(rastvec.y()) == 1)
         {
+            // We avoid noncoalesced memory reads
             transposed = true;
             img = img.transpose().eval();
-            rastvec = Point2{-rastvec.y(), -rastvec.x()};
+            rastvec = Point2{-rastvec.y(), -rastvec.x()}; // This way, rastvec.x > rastvec.y always and |rastvec.x| == 1
         }
 
         Eigen::Array<long, 2, 1> p0{0, 0};
@@ -84,13 +85,13 @@ namespace openfdcm::core
 
         // Temporary storage for the computation
         std::vector<Eigen::Index> v(img.rows());
-        std::vector<T> z(img.rows() + 1);
+        std::vector<Eigen::Index> z(img.rows() + 1);
 
         for (Eigen::Index i = 0; i < img.cols(); ++i) {
             Eigen::Index k{0};
             v[0] = 0;
-            z[0] = -std::numeric_limits<T>::infinity();
-            z[1] = std::numeric_limits<T>::infinity();
+            z[0] = std::numeric_limits<T>::min();
+            z[1] = std::numeric_limits<T>::max();
 
             // Image has colmajor storage order
             for (Eigen::Index q{1}; q < img.rows(); ++q) {
@@ -101,7 +102,7 @@ namespace openfdcm::core
                         ++k;
                         v[k] = q;
                         z[k] = s;
-                        z[k + 1] = std::numeric_limits<T>::infinity();
+                        z[k + 1] = std::numeric_limits<T>::max();
                         break;
                     }
                     --k;
@@ -155,21 +156,16 @@ namespace openfdcm::core
      * @return The resulting image with the distance transform applied, where each pixel holds the distance value.
      */
     template<typename T, Distance D=Distance::L2>
-    inline RawImage<T> distanceTransform(LineArray const& linearray, Size const& size) noexcept {
+    inline void distanceTransform(RawImage<T> &colmaj_img, LineArray const& linearray) noexcept {
         static_assert(std::numeric_limits<T>::has_infinity);
-
-        // Initialize the image with max values
-        RawImage<T> colmaj_img = RawImage<T>::Constant(size.y(), size.x(), std::numeric_limits<T>::max());
-        if (linearray.cols() == 0) return colmaj_img;
-        drawLines(colmaj_img, linearray, 0);
 
         // Perform column pass
         if constexpr (D == Distance::L1) {
             _distanceTransformColumnPassL1(colmaj_img);
-            // Perform row pass (using the transpose of the column pass)
-            colmaj_img = colmaj_img.transpose().eval(); // transpose require eval to be actually computed
+            // Perform row pass (using the transpose of the column pass to avoid noncoalesced memory reads)
+            colmaj_img = colmaj_img.transpose().eval();
             _distanceTransformColumnPassL1(colmaj_img);
-            return colmaj_img.transpose();
+            colmaj_img.transpose();
         }
 
         _distanceTransformColumnPassL2(colmaj_img);
@@ -178,8 +174,8 @@ namespace openfdcm::core
         _distanceTransformColumnPassL2(colmaj_img);
 
         if constexpr (D == Distance::L2)
-            return colmaj_img.transpose().sqrt();
-        return colmaj_img.transpose();
+            colmaj_img.transpose().sqrt();
+        colmaj_img.transpose();
     }
 
     /**

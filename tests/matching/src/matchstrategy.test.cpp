@@ -111,12 +111,12 @@ void run_test(float scene_ratio, BS::concurrency_t num_threads) {
     }
 }
 
-TEST_CASE("DefaultMatch") {
+TEST_CASE("DefaultMatch", "[openfdcm::matching]") {
     run_test(1.0f, 1);
     run_test(1.0f, 2);
 }
 
-TEST_CASE("Scale down scene") {
+TEST_CASE("Scale down scene", "[openfdcm::matching]") {
     run_test(0.3f, 1);
     run_test(0.3f, 2);
 }

@@ -91,7 +91,7 @@ namespace openfdcm::matching {
             // Shift the scene so that all scene lines are greater than 0.
             openfdcm::matching::detail::SceneShift const &sceneShift =
                     openfdcm::matching::detail::getSceneCenteredTranslation(scene, params.padding);
-            const core::LineArray translatedScene = core::translate(scene, sceneShift.translation);
+            const core::LineArray& translatedScene = core::translate(scene, sceneShift.translation);
 
             cuda::Dt3CudaMap dt3map{};
             dt3map.features.reserve(params.depth);
@@ -110,21 +110,28 @@ namespace openfdcm::matching {
             auto const &indices = matching::detail::classifyLines(dt3map.sortedAngles, translatedScene);
 
             auto func = [&](size_t angleIdx) {
-                // Acquire a stream from the pool
                 auto streamWrapper = streamPool->getStream();
 
-                Eigen::Matrix<float, 4, Eigen::Dynamic> orientedScene = scene(Eigen::all, indices.at(angleIdx)).eval();
-                core::cuda::CudaArray<float, 4, -1> cuScene(orientedScene.data(), 4, orientedScene.cols());
+                Eigen::Matrix<float, 4, Eigen::Dynamic> sceneLinesSelection =
+                        translatedScene(Eigen::all, indices.at(angleIdx)).eval();
+                if(sceneLinesSelection.cols() > 0)
+                {
+                    // An image must have at least one line or else, the NPP distance transform impl consider
+                    // the image as non valid:
+                    // https://docs.nvidia.com/cuda/npp/image_filtering_functions.html#group__image__filter__distance__transform_1image_filter_distance_transform
 
-                auto &d_img = *dt3map.features[angleIdx];
+                    core::cuda::CudaArray<float, 4, -1> cuScene(sceneLinesSelection.data(), 4, sceneLinesSelection.cols());
 
-                // Initialize the image with max values
-                setAll(d_img, std::numeric_limits<float>::max(), streamWrapper);
-                core::cuda::synchronize(streamWrapper);
-                drawLines(d_img, cuScene, 0, streamWrapper);
-                core::cuda::synchronize(streamWrapper);
+                    auto &d_img = *dt3map.features[angleIdx];
+                    core::cuda::CudaArray<u_char, -1,-1> inputImg{d_img.rows(), d_img.cols()};
+                    setAll(inputImg, 1, streamWrapper);
+                    drawLines(inputImg, cuScene, 0, streamWrapper);
 
-                core::cuda::distanceTransform<D>(d_img, cuScene, streamWrapper);
+                    core::cuda::distanceTransform<D>(inputImg, d_img, streamWrapper);
+                } else {
+                    setAll(*dt3map.features[angleIdx], std::numeric_limits<float>::max(), streamWrapper);;
+                }
+                //drawCudaFeature("distance_" + std::to_string(angleIdx) +".pgm", *dt3map.features[angleIdx], 100, streamWrapper);
                 streamPool->returnStream(std::move(streamWrapper));
             };
 
@@ -148,12 +155,16 @@ namespace openfdcm::matching {
             // Step 4: Propagate orientation
             auto streamWrapper = streamPool->getStream();
             propagateOrientation(dt3map.features, dt3map.sortedAngles, params.dt3Coeff, streamWrapper);
+            for(size_t i{0}; i<dt3map.features.size();++i){
+                //drawCudaFeature("propagate_" +std::to_string(i) +".pgm", *dt3map.features.at(i), 100, streamWrapper);
+            }
             streamPool->returnStream(std::move(streamWrapper));
 
             // Step 5: Line integral
             for (size_t angleIdx{0}; angleIdx < dt3map.sortedAngles.size(); ++angleIdx) {
                 streamWrapper = streamPool->getStream();
                 lineIntegral(*dt3map.features[angleIdx], dt3map.sortedAngles[angleIdx], streamWrapper);
+                drawCudaFeature("lineIntegral_" +std::to_string(angleIdx) +".pgm", *dt3map.features[angleIdx], 100, streamWrapper);
                 streamPool->returnStream(std::move(streamWrapper));
             }
 

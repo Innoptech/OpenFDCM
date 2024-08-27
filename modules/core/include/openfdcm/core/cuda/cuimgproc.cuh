@@ -26,36 +26,23 @@ SOFTWARE.
 #define OPENFDCM_CUDA_CUIMGPROC_CUH
 #include "openfdcm/core/cuda/cumath.cuh"
 #include "openfdcm/core/cuda/cudrawing.cuh"
+#include "openfdcm/core/imgproc.h"
 #include "openfdcm/core/drawing.h"
+
+#include <nppdefs.h>
+#include <nppcore.h>
+#include <nppi_filtering_functions.h>
+
 
 namespace openfdcm::core::cuda {
 
-    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
-    __global__ void lineIntegralKernelCol(DerivedArray& d_img, float rastvec_x, float rastvec_y, int forwardIdx) {
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+#include <stdio.h>
 
-        int col = forwardIdx; // for readability
-        int previous_p1x = (rastvec_x < 0) ? d_img.cols() - 1 - forwardIdx : forwardIdx;
 
-        int p1x = previous_p1x + col * static_cast<int>(rastvec_x);
-        int p1y = static_cast<int>(std::round(col * rastvec_y)) - static_cast<int>(std::round((col - 1) * rastvec_y));
-
-        // Bound check and process the column
-        int y1 = max(p1y, 0);
-        int y2 = max(-p1y, 0);
-        int col_len = d_img.rows() - std::abs(p1y);
-        if (idx >= col_len || idx < y1) return;
-        d_img(idx,p1x) += d_img(y2,previous_p1x);
-    }
-
-    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
-    __host__ inline void lineIntegral(DerivedArray& d_img, float lineAngle, CudaStreamPtr const& stream) noexcept
+    template<typename DerivedCuda> requires (std::is_floating_point_v<typename DerivedCuda::Scalar>)
+    __host__ inline void lineIntegral(CudaArrayBase<DerivedCuda>& d_img, float lineAngle, CudaStreamPtr const& stream) noexcept
     {
         Point2 rastvec = openfdcm::core::rasterizeVector(Point2{std::cos(lineAngle), std::sin(lineAngle)});
-
-        // Set up grid and block sizes
-        int threadsPerBlock = 256;
-        int blocksPerGrid = (d_img.cols() + threadsPerBlock - 1) / threadsPerBlock;
 
         bool transposed{false};
         if (std::abs(rastvec.y()) == 1)
@@ -65,99 +52,21 @@ namespace openfdcm::core::cuda {
             rastvec = Point2{-rastvec.y(), -rastvec.x()};
         }
 
-        // Launch the kernel based on the rasterized vector
-        for(int colIdx{0}; colIdx<d_img.cols(); ++colIdx)
-        {
-            lineIntegralKernelCol<<<blocksPerGrid, threadsPerBlock, 0, stream->getStream()>>>(d_img, rastvec.x(), rastvec.y(), colIdx);
-            synchronize(stream);
-        }
+        // Launch the kernel
+        int rows = d_img.rows();
+        int cols = d_img.cols();
+        prescan<<<1, rows / 2, 512 * sizeof(float)>>>(d_img.derived().dataTmp(), d_img.derived().data(), 512);
+        synchronize(stream);
+        swap(d_img.derived().data(), d_img.derived().dataTmp());
 
         if(transposed)
             transpose(d_img, stream);
     }
 
-    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
-    __global__ void distanceTransformColumnPassL2Kernel(DerivedArray& d_img) {
-        int col = blockIdx.x;
-        if (col >= d_img.cols()) return;
-
-        extern __shared__ int sharedMemory[];
-        int* v = sharedMemory;              // Use shared memory for v
-        auto* z = (float*)&v[d_img.rows()];  // Use shared memory for z
-
-        int k = 0;
-        v[0] = 0;
-        z[0] = -INFINITY;
-        z[1] = INFINITY;
-
-        for (int q = 1; q < d_img.rows(); ++q) {
-            while (true) {
-                int v_k = v[k];
-                float const s = (d_img(q, col) + float(q * q) - d_img(v_k, col) - float(v_k * v_k)) / float(2 * q - 2 * v_k);
-                if (s > z[k]) {
-                    k++;
-                    v[k] = q;
-                    z[k] = s;
-                    z[k + 1] = INFINITY;
-                    break;
-                }
-                k--;
-            }
-        }
-
-        k = 0;
-        for (int q = 0; q < d_img.rows(); ++q) {
-            while (z[k + 1] < (float)q) k++;
-            int v_k = v[k];
-            int q_ = q - v_k;
-            d_img(q, col) = d_img(v_k, col) + float(q_ * q_);
-        }
-    }
-
-    /**
-     * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions for L2_SQUARED distance
-     * @param d_img The device image that will be transformed in place
-     */
-    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
-    __host__ static inline void _distanceTransformColumnPassL2(DerivedArray &d_img, CudaStreamPtr const& stream) noexcept {
-        // Determine block and grid sizes
-        int threadsPerBlock = d_img.rows(); // Each thread handles one row in a column
-        int blocksPerGrid = d_img.cols();   // Each block handles one column
-        size_t sharedMemorySize = d_img.rows() * sizeof(int) + (d_img.rows() + 1) * sizeof(float);
-        distanceTransformColumnPassL2Kernel<<<blocksPerGrid, threadsPerBlock, sharedMemorySize, stream->getStream()>>>(d_img);
-        synchronize(stream);
-    }
-
-    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
-    __global__ void distanceTransformColumnPassL1Kernel(DerivedArray &d_img) {
-        int col = blockIdx.x;
-        if (col >= d_img.cols()) return;
-
-        // Forward pass
-        for (int q = 1; q < d_img.rows(); ++q) {
-            d_img(q, col) = min(d_img(q, col), d_img(q-1, col) + 1.0f);
-        }
-
-        // Backward pass
-        for (int q = d_img.rows() - 2; q >= 0; --q) {
-            d_img(q, col) = min(d_img(q, col), d_img(q+1, col) + 1.0f);
-        }
-    }
-
-    /**
-     * @brief Performs a 1D pass of the algorithm Distance Transforms of Sampled Functions
-     * @param d_img The device image that will be transformed in place
-     */
-    template<typename DerivedArray> requires (std::is_same_v<typename DerivedArray::Scalar, float>)
-    __host__ static inline void _distanceTransformColumnPassL1(DerivedArray &d_img, CudaStreamPtr const& stream) noexcept {
-        int threadsPerBlock = d_img.rows();  // Each thread handles one row in a column
-        int blocksPerGrid = d_img.cols();    // Each block handles one column
-        distanceTransformColumnPassL1Kernel<<<blocksPerGrid, threadsPerBlock, 0, stream->getStream()>>>(d_img);
-        synchronize(stream);
-    }
 
     /**
      * @brief Perform the distance transform for a given set of lines.
+     * See https://github.com/NVIDIA/CUDALibrarySamples/tree/master/NPP/distanceTransform
      *
      * This function computes the distance transform of an image based on the provided line array
      * and image size. It supports different distance metrics (L1, L2, and L2 squared) depending on
@@ -172,33 +81,72 @@ namespace openfdcm::core::cuda {
      *
      * @tparam D The type of distance metric to use (default is `Distance::L2`).
      * @param d_img The pre-allocated cuda image
-     * @param linearray The given set of lines for which the distance transform is to be computed.
      * @return The resulting image with the distance transform applied, where each pixel holds the distance value.
      */
-    template<core::Distance D=core::Distance::L2, typename DerivedArray>
-    __host__ inline void distanceTransform(DerivedArray &colmaj_img, cuLineArray const& linearray,
-                                  CudaStreamPtr const& stream) noexcept {
+    template<core::Distance D=core::Distance::L1, typename DerivedCuda>
+    __host__ inline void distanceTransform(CudaArray<Npp8u,-1,-1> const& inputImg,
+            CudaArrayBase<DerivedCuda> &outputImg, CudaStreamPtr const& stream)
+    {
+        using T = typename DerivedCuda::Scalar;
+        static_assert(D!=core::Distance::L1, "NO available CUDA impl for L1 distance");
+        static_assert((std::is_same_v<T, float>) || (std::is_same_v<T, uint16_t>));
 
-        if constexpr (D == core::Distance::L1) {
-            _distanceTransformColumnPassL1(colmaj_img, stream);
-            transpose(colmaj_img, stream);
-            _distanceTransformColumnPassL1(colmaj_img, stream);
-            transpose(colmaj_img, stream);
-            return;
+        NppStreamContext nppStreamCtx;
+        nppStreamCtx.hStream = stream->getStream();
+
+        cudaError_t cudaError = cudaGetDevice(&nppStreamCtx.nCudaDeviceId);
+        if (cudaError != cudaSuccess){
+            throw std::runtime_error("CUDA error: no devices supporting CUDA.\n");
         }
 
-        _distanceTransformColumnPassL2(colmaj_img, stream);
-        transpose(colmaj_img, stream);
-        _distanceTransformColumnPassL2(colmaj_img, stream);
-        transpose(colmaj_img, stream);
+        cudaError = cudaStreamGetFlags(nppStreamCtx.hStream, &nppStreamCtx.nStreamFlags);
 
-        if constexpr (D == core::Distance::L2) {
-            core::cuda::sqrt(colmaj_img, stream);
+        cudaDeviceProp oDeviceProperties{};
+        cudaError = cudaGetDeviceProperties(&oDeviceProperties, nppStreamCtx.nCudaDeviceId);
+
+        nppStreamCtx.nMultiProcessorCount = oDeviceProperties.multiProcessorCount;
+        nppStreamCtx.nMaxThreadsPerMultiProcessor = oDeviceProperties.maxThreadsPerMultiProcessor;
+        nppStreamCtx.nMaxThreadsPerBlock = oDeviceProperties.maxThreadsPerBlock;
+        nppStreamCtx.nSharedMemPerBlock = oDeviceProperties.sharedMemPerBlock;
+
+        NppiSize oImageSizeROI(inputImg.cols(), inputImg.rows());
+
+        size_t nScratchBufferSize;
+        if(nppiDistanceTransformPBAGetBufferSize(oImageSizeROI, &nScratchBufferSize) != NPP_NO_ERROR) {
+            throw std::runtime_error{"CUDA error: Not able to get PBA buffer size.\n"};
+        }
+        cuVector<Npp8u,-1> deviceBufferPBA(nScratchBufferSize);
+
+        if constexpr (std::is_same_v<T, float>)
+        {
+            if (nppiDistanceTransformPBA_8u32f_C1R_Ctx(
+                    inputImg.derived().data(), outputImg.cols() * sizeof(Npp8u), 0u, 0u,
+                    nullptr, 0, nullptr, 0, nullptr, 0,
+                    outputImg.derived().data(), outputImg.cols() * sizeof(Npp32f),
+                    oImageSizeROI, deviceBufferPBA.data(), nppStreamCtx) != NPP_SUCCESS){
+                throw std::runtime_error{"CUDA error: Distance Transform failed.\n"};
+            }
+        }
+        if constexpr (std::is_same_v<T, uint16_t>)
+        {
+            if (nppiDistanceTransformPBA_8u16u_C1R_Ctx(
+                    inputImg.derived().data(), outputImg.cols() * sizeof(Npp8u), 0u, 0u,
+                    nullptr, 0, nullptr, 0, nullptr, 0,
+                    outputImg.derived().data(), outputImg.cols() * sizeof(Npp16u),
+                    oImageSizeROI, deviceBufferPBA.data(), nppStreamCtx) != NPP_SUCCESS){
+                throw std::runtime_error{"CUDA error: Distance Transform failed.\n"};
+            }
+        }
+        synchronize(stream);
+
+        if constexpr (D==core::Distance::L2_SQUARED) {
+            core::cuda::pow(outputImg, static_cast<T>(2), stream);
         }
     }
 
-    template<typename DerivedArray>
-    __global__ void minCoeffKernel(DerivedArray& array1, DerivedArray const& array2, float coeff) {
+    template<typename DerivedCuda>
+    __global__ void minCoeffKernel(CudaArrayBase<DerivedCuda>& array1, 
+                                   CudaArrayBase<DerivedCuda> const& array2, float coeff) {
         int idx_x = blockIdx.x * blockDim.x + threadIdx.x;
         int idx_y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -214,9 +162,9 @@ namespace openfdcm::core::cuda {
      * @param coeff The propagation coefficient
      * @param stream The cuda stream on which to run the kernel
      */
-    __host__
-    inline void propagateOrientation(std::vector<std::shared_ptr<CudaArray<float,-1,-1>>> &featuremap,
-                                     std::vector<float> const& angles, float coeff, CudaStreamPtr const& stream) noexcept
+    __host__ inline void propagateOrientation(
+            std::vector<std::shared_ptr<CudaArray<float,-1,-1>>> &featuremap,
+            std::vector<float> const& angles, float coeff, CudaStreamPtr const& stream) noexcept
     {
         assert(!featuremap.empty());
         assert(featuremap.size() == angles.size());

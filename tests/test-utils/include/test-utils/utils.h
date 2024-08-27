@@ -36,10 +36,10 @@ namespace tests
      * @return The 2x2 rotation matrix
      */
     inline openfdcm::core::Mat22 makeRotation(const float& lineAngle){
-        float sin(std::sin(lineAngle)), cos(std::cos(lineAngle));
+        float sin_(std::sin(lineAngle)), cos_(std::cos(lineAngle));
         return openfdcm::core::Mat22({
-            {cos, -sin},
-            {sin, cos}
+            {cos_, -sin_},
+            {sin_, cos_}
         });
     }
 
@@ -75,7 +75,7 @@ namespace tests
         openfdcm::core::LineArray linearray(4, line_number);
 
         // Generate logspace angles
-        std::vector<float> line_angles = logspace(2 * M_PI, 4 * M_PI, line_number);
+        std::vector<float> line_angles = logspace(2 * M_PI, 4 * M_PI, line_number+1);
 
         for (size_t i = 0; i < line_number; ++i) {
             float lineAngle = line_angles[i];

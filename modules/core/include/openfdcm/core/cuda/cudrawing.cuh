@@ -103,13 +103,14 @@ namespace openfdcm::core::cuda {
         return rasterization.array().round().cast<Eigen::Index>();
     }
 
+    template<IsCuda DerivedCuda>
     __global__
-    inline void drawLinesKernel(CudaArray<float,-1,-1>& d_img, cuLineArray const& culinearray, float const color) {
+    void drawLinesKernel(CudaArrayBase<DerivedCuda>& d_img, cuLineArray const& culinearray, float const color) {
         int idx = blockIdx.x * blockDim.x + threadIdx.x;
         if (idx >= culinearray.cols()) return;
 
         // Each thread processes one line
-        Eigen::Map<LineArray> linearray(culinearray.getArray(), culinearray.rows(), culinearray.cols());
+        Eigen::Map<LineArray> linearray(culinearray.data(), culinearray.rows(), culinearray.cols());
         auto const& line = clipLine(getLine(linearray, idx), Box{0, static_cast<float>(d_img.cols()-1),
                                                                  0, static_cast<float>(d_img.rows()-1)});
         auto const& rasterization = rasterizeLine(line);
@@ -133,8 +134,8 @@ namespace openfdcm::core::cuda {
      * @param color The greyscale color to draw
      * @param stream The cuda stream used to draw
      */
-    __host__
-    inline void drawLines(CudaArray<float,-1,-1>& img, cuLineArray const& culinearray,
+     template<IsCuda DerivedCuda>
+    __host__ inline void drawLines(CudaArrayBase<DerivedCuda>& img, cuLineArray const& culinearray,
                           float const color, CudaStreamPtr const& stream) noexcept(false)
     {
         if (culinearray.cols() == 0) return;
@@ -143,6 +144,32 @@ namespace openfdcm::core::cuda {
         int threadsPerBlock = 256;
         auto blocksPerGrid = (num_lines + threadsPerBlock - 1) / threadsPerBlock;
         drawLinesKernel<<<blocksPerGrid, threadsPerBlock, 0, stream->getStream()>>>(img, culinearray, color);
+        synchronize(stream);
     }
-} //namespace openfdcm::cuda
+} //namespace openfdcm::core::cuda
+
+#ifdef DEBUG
+namespace openfdcm::core::cuda
+{
+    template<IsCuda DerivedCuda>
+    inline void drawCudaFeature(std::string const& filepath, core::cuda::CudaArrayBase<DerivedCuda> const& d_img,
+                                float max, const core::cuda::CudaStreamPtr &stream)
+    {
+        Eigen::Array<float,-1,-1> cpuFeature(d_img.rows(), d_img.cols());
+        copyToCpuAsync(cpuFeature, d_img, stream);
+        core::cuda::synchronize(stream);
+
+        // Normalize
+        float min = cpuFeature.minCoeff();
+
+        // Normalize the array to the range [0, 255]
+        cpuFeature = clip(255 * (cpuFeature - min) / (max - min), 0, 255);
+
+        // PGM is written RowMajor
+        Eigen::Array<u_char,-1,-1,Eigen::RowMajor> rowmajorImg = cpuFeature.cast<u_char>();
+        savePGM(filepath, rowmajorImg.data(), rowmajorImg.cols(), rowmajorImg.rows());
+    }
+}
+#endif
+
 #endif //OPENFDCM_CUDA_CUDRAWING_CUH
