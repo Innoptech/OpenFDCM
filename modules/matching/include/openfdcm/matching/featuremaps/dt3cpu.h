@@ -175,14 +175,15 @@ namespace openfdcm::matching {
         auto func = [&](size_t angleIdx) {
             Eigen::Matrix<float, 4, Eigen::Dynamic> sceneLinesSelection =
                     translatedScene(Eigen::all, indices.at(angleIdx)).eval();
+            auto colmaj_img = core::RawImage<float>::Constant(
+                    size.y(), size.x(), std::numeric_limits<float>::max()).eval();
             if(sceneLinesSelection.cols() > 0)
             {
-                auto colmaj_img = core::RawImage<float>::Constant(
-                        size.y(), size.x(), std::numeric_limits<float>::max()).eval();
+                // An image without any site points would be invalid for distance transform
                 core::drawLines(colmaj_img, sceneLinesSelection, static_cast<float>(0));
-                core::distanceTransform<float, D>(colmaj_img, sceneLinesSelection);
-                dt3map.features[angleIdx] = std::move(colmaj_img);
+                core::distanceTransform<D>(colmaj_img);
             }
+            dt3map.features[angleIdx] = std::move(colmaj_img);
         };
 
         if (pool_ptr) {

@@ -258,34 +258,28 @@ TEST_CASE("Dt3Cpu", "[openfdcm::matching]")
     {
         const float coeff{0.5f};
         const Size featuresize{30, 40};
-        const LineArray linearray{
-                {0},
-                {0},
-                {0},
-                {39}
-        };
-
+        const LineArray linearray{{0},{0},{0},{39}};
 
         const std::vector<float> sortedAngles{-M_PI_4f,  0.f, M_PI_4f};
         std::vector<RawImage<float>> features(sortedAngles.size());
 
         for(size_t angleIdx{0}; angleIdx < sortedAngles.size(); ++angleIdx)
-            features[angleIdx] = RawImage<float>::Constant(featuresize.y(), featuresize.x(), INFINITY);
+            features[angleIdx] = RawImage<float>::Constant(featuresize.y(), featuresize.x(), std::numeric_limits<float>::max());
 
-        Dt3CpuMap<float> featuremap{features, sortedAngles};
-        distanceTransform(featuremap.features[0], linearray);
+        drawLines(features[0], linearray, static_cast<float>(0));
+        distanceTransform(features[0]);
 
-        propagateOrientation(featuremap.features, featuremap.sortedAngles, coeff);
+        propagateOrientation(features, sortedAngles, coeff);
 
-        auto feature1 = featuremap.features[0];
-        auto lineAngle1 = featuremap.sortedAngles[0];
+        auto feature1 = features[0];
+        auto lineAngle1 = sortedAngles[0];
         const float distance1 = feature1(0,29);
         REQUIRE(distance1 == 29.f);
         for(size_t angleIdx{0}; angleIdx < sortedAngles.size(); ++angleIdx)
         {
-            const float dist_angle2 = std::abs(constrainHalfAngle(lineAngle1 - featuremap.sortedAngles[angleIdx]));
+            const float dist_angle2 = std::abs(constrainHalfAngle(lineAngle1 - sortedAngles[angleIdx]));
             const float propagated = distance1 + dist_angle2*coeff;
-            const auto& feature2 = featuremap.features[angleIdx];
+            const auto& feature2 = features[angleIdx];
             REQUIRE(relativelyEqual(propagated, feature2(0,29), 0.f, 1e-5f));
         }
     }
@@ -321,7 +315,8 @@ TEST_CASE("Dt3Cpu", "[openfdcm::matching]")
                 {5},
                 {0}
         };
-        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 2.0});
+        auto const threadpool = std::make_shared<BS::thread_pool>(2);
+        const Dt3Cpu& featuremap = buildCpuFeaturemap(scene, Dt3CpuParameters{4, 1, 2.0}, threadpool);
         // Validation:
         const auto& angleIdx = closestOrientationIndex(featuremap.getDt3Map().sortedAngles, scene);
         const auto& feature = featuremap.getDt3Map().features[angleIdx];

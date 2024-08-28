@@ -58,6 +58,7 @@ namespace openfdcm::core
 
     template<typename T> using DenseBase = Eigen::DenseBase<T>;
     template<typename T> using MatrixBase = Eigen::MatrixBase<T>;
+    template<typename T> using ArrayBase = Eigen::ArrayBase<T>;
     using Size = Eigen::Vector<size_t, 2>;
     using Point2 = Eigen::Vector<float, 2>;
     using Mat22 = Eigen::Matrix<float, 2, 2>;

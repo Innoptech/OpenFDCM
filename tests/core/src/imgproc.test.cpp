@@ -169,25 +169,30 @@ void testDistanceTransform(const Eigen::Array<float,1,4>& expected_single_point,
                            const Eigen::Array<float,1,8>& expected_line) {
 
     SECTION("Test for validity") {
-        const Size featuresize{5, 10};
-        RawImage<float> const dist_trans =
-                distanceTransform<float, DistanceType>(LineArray{{0}, {0}, {0}, {9}}, featuresize);
+        const LineArray scene{{0}, {0}, {0}, {9}};
+        auto dist_trans = RawImage<float>::Constant(10,5, std::numeric_limits<float>::max()).eval();
+        drawLines(dist_trans, scene, static_cast<float>(0));
+        distanceTransform<DistanceType>(dist_trans);
         REQUIRE(dist_trans.col(0).sum() == 0);
-        for (Eigen::Index i{0}; i < static_cast<Eigen::Index>(featuresize.x()); ++i) {
+        for (Eigen::Index i{0}; i < dist_trans.cols(); ++i) {
             REQUIRE(dist_trans.col(i).isApproxToConstant(std::pow(i, DistanceType == Distance::L2_SQUARED ? 2 : 1)));
         }
         REQUIRE(relativelyEqual(dist_trans.col(1).sum(), (float)dist_trans.rows(), 0.f, 1e-5f));
     }
 
     SECTION("Test for line") {
-        RawImage<float> const line_dist_trans =
-                distanceTransform<float, DistanceType>(LineArray{{2}, {0}, {5}, {0}}, Size{8,2});
+        const LineArray scene{{2}, {0}, {5}, {0}};
+        auto line_dist_trans = RawImage<float>::Constant(2,8, std::numeric_limits<float>::max()).eval();
+        drawLines(line_dist_trans, scene, static_cast<float>(0));
+        distanceTransform<DistanceType>(line_dist_trans);
         REQUIRE(allClose(line_dist_trans.row(0), expected_line, 0.f, 1e-5f));
     }
 
     SECTION("Test for single point") {
-        RawImage<float> const single_pt_dist_trans =
-                distanceTransform<float, DistanceType>(LineArray{{2}, {0}, {2}, {0}}, Size{4,1});
+        const LineArray scene{{2}, {0}, {2}, {0}};
+        auto single_pt_dist_trans = RawImage<float>::Constant(1,4, std::numeric_limits<float>::max()).eval();
+        drawLines(single_pt_dist_trans, scene, static_cast<float>(0));
+        distanceTransform<DistanceType>(single_pt_dist_trans);
         std::cout << single_pt_dist_trans <<"\n";
         REQUIRE(allClose(single_pt_dist_trans.row(0), expected_single_point, 0.f, 1e-5f));
     }

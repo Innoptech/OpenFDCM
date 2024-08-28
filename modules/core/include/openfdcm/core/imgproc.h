@@ -36,7 +36,7 @@ namespace openfdcm::core
      * @param lineAngle The integration lineAngle
      */
     template<typename Derived>
-    inline void lineIntegral(Eigen::DenseBase<Derived>& img, float  lineAngle) noexcept
+    inline void lineIntegral(Eigen::ArrayBase<Derived>& img, float  lineAngle)
     {
         Point2 rastvec = rasterizeVector(Point2{std::cos(lineAngle), std::sin(lineAngle)});
 
@@ -85,13 +85,13 @@ namespace openfdcm::core
 
         // Temporary storage for the computation
         std::vector<Eigen::Index> v(img.rows());
-        std::vector<Eigen::Index> z(img.rows() + 1);
+        std::vector<T> z(img.rows() + 1);
 
         for (Eigen::Index i = 0; i < img.cols(); ++i) {
             Eigen::Index k{0};
             v[0] = 0;
-            z[0] = std::numeric_limits<T>::min();
-            z[1] = std::numeric_limits<T>::max();
+            z[0] = -std::numeric_limits<T>::infinity();
+            z[1] = std::numeric_limits<T>::infinity();
 
             // Image has colmajor storage order
             for (Eigen::Index q{1}; q < img.rows(); ++q) {
@@ -102,7 +102,7 @@ namespace openfdcm::core
                         ++k;
                         v[k] = q;
                         z[k] = s;
-                        z[k + 1] = std::numeric_limits<T>::max();
+                        z[k + 1] = std::numeric_limits<T>::infinity();
                         break;
                     }
                     --k;
@@ -124,7 +124,7 @@ namespace openfdcm::core
      * @param img The resulting distance transform as an image
      */
     template<typename Derived>
-    static inline void _distanceTransformColumnPassL1(Eigen::DenseBase<Derived>& img) noexcept {
+    static inline void _distanceTransformColumnPassL1(Eigen::ArrayBase<Derived>& img) noexcept {
         for (Eigen::Index q{1}; q < img.cols(); ++q) {
             img.col(q) = img.col(q).min(img.col(q-1)+1);
         }
@@ -146,8 +146,7 @@ namespace openfdcm::core
      * - **L2 Distance**: Computes the Euclidean distance.
      * - **L2 Squared Distance**: Computes the square of the Euclidean distance.
      *
-     * Depending on the chosen distance type, different algorithms are applied in both the column
-     * and row passes.
+     * An input array that do no contains any site points (sites have value==0) is considered invalid.
      *
      * @tparam T The type of the image (e.g., `float`, `double`), which must support infinity.
      * @tparam D The type of distance metric to use (default is `Distance::L2`).
@@ -155,9 +154,10 @@ namespace openfdcm::core
      * @param size The size of the resulting image.
      * @return The resulting image with the distance transform applied, where each pixel holds the distance value.
      */
-    template<typename T, Distance D=Distance::L2>
-    inline void distanceTransform(RawImage<T> &colmaj_img, LineArray const& linearray) noexcept {
-        static_assert(std::numeric_limits<T>::has_infinity);
+    template<Distance D=Distance::L2, IsEigen Derived>
+    inline void distanceTransform(ArrayBase<Derived> &colmaj_img) {
+        static_assert(std::numeric_limits<typename Derived::Scalar>::has_infinity);
+        assert(colmaj_img.cols() > 0 && colmaj_img.rows() > 0);
 
         // Perform column pass
         if constexpr (D == Distance::L1) {
@@ -165,7 +165,8 @@ namespace openfdcm::core
             // Perform row pass (using the transpose of the column pass to avoid noncoalesced memory reads)
             colmaj_img = colmaj_img.transpose().eval();
             _distanceTransformColumnPassL1(colmaj_img);
-            colmaj_img.transpose();
+            colmaj_img = colmaj_img.transpose().eval();
+            return;
         }
 
         _distanceTransformColumnPassL2(colmaj_img);
@@ -173,9 +174,11 @@ namespace openfdcm::core
         colmaj_img = colmaj_img.transpose().eval(); // transpose require eval to be actually computed
         _distanceTransformColumnPassL2(colmaj_img);
 
-        if constexpr (D == Distance::L2)
-            colmaj_img.transpose().sqrt();
-        colmaj_img.transpose();
+        if constexpr (D == Distance::L2) {
+            colmaj_img = colmaj_img.transpose().sqrt().eval();
+            return;
+        }
+        colmaj_img = colmaj_img.transpose().eval();
     }
 
     /**
@@ -184,8 +187,9 @@ namespace openfdcm::core
     * @param angles The angle for each feature map as a vector
     * @param coeff The propagation coefficient
     */
-    template<typename T>
-    inline void propagateOrientation(std::vector<RawImage<T>>& featuremap, std::vector<float>& angles, float coeff) noexcept
+    template<IsEigen Derived>
+    inline void propagateOrientation(std::vector<Derived>& featuremap,
+                                     std::vector<float> const& angles, float coeff) noexcept
     {
         assert(featuremap.size() == angles.size());
 
