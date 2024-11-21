@@ -132,5 +132,15 @@ We welcome contributions! Please submit pull requests or report issues directly 
 ## Citing OpenFDCM
 If you use OpenFDCM in your research, please use the following BibTeX entry.
 ```bibtex
-%Bibtex to come
+@mastersthesis{ruel2024,
+  author       = {Jean-Christophe Ruel},
+  title        = {Détection de la pose d'objets enchevêtrés avec des surfaces spéculaires pour la saisie robotique autonome à faible coût},
+  school       = {Université Laval},
+  year         = {2024},
+  type         = {Mémoire de maîtrise},
+  address      = {Québec},
+  advisor      = {Philippe Cardou and Jean-François Lalonde},
+  keywords     = {Vision par ordinateur, Matériaux réfléchissants, Réflexion spéculaire, Robotique},
+  url          = {https://hdl.handle.net/20.500.11794/152037},
+}
 ```
